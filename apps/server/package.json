@@ -4,7 +4,22 @@
   "private": true,
   "scripts": {
     "build": "tsc -b",
-    "lint": "eslint src",
-    "format:check": "prettier --check src"
+    "test": "jest --config jest.config.cjs --runInBand",
+    "lint": "eslint src tests",
+    "format:check": "prettier --check src tests"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.9",
+    "@nestjs/core": "^11.1.9",
+    "@nestjs/platform-express": "^11.1.9",
+    "@nestjs/platform-socket.io": "^11.1.9",
+    "@nestjs/websockets": "^11.1.9",
+    "@power-hungry-pets/game-engine": "0.0.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
   }
 }

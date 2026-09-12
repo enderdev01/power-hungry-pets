@@ -46,6 +46,7 @@ export type {
   CardInstanceId,
   CardType,
   MatchState,
+  PendingInteraction,
   PlayerId,
   PlayerInput,
   PlayerState,
@@ -109,3 +110,18 @@ export type {
   TurnErrorCode,
   TurnEvent,
 } from './turn-engine';
+export { getPlayerPrivateView, getPublicGameView, ProjectionError } from './views';
+export type {
+  GameSnapshot,
+  PrivateGameView,
+  PrivatePendingDecision,
+  ProjectionErrorCode,
+  PublicCard,
+  PublicDiscardView,
+  PublicGameView,
+  PublicMatchView,
+  PublicPendingInteraction,
+  PublicPlayerView,
+  PublicRevealedHand,
+  PublicRoundView,
+} from './views';

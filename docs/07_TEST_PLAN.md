@@ -278,7 +278,6 @@ Verified properties:
 Observed evidence: 1,000/1,000 corpus matches reached `MATCH_END` across player counts 2–6, exercising both the exhaustion-reveal and last-survivor round-end paths, with zero thrown invariant/engine errors.
 
 Simulation is supplementary; it does not replace explicit rules tests.
-
 ## 23. Milestone 5 hardening tests
 
 Implemented in `tests/legal-actions.test.ts`, `tests/simulation-policy.test.ts`, and `tests/match-runner.test.ts`.
@@ -304,3 +303,76 @@ Implemented in `tests/legal-actions.test.ts`, `tests/simulation-policy.test.ts`,
 - invariant assertions around every transition (round after setup/every command/round end; match after creation/every applied result);
 - transcript entry-per-command/result accounting and transcript-wide event totals on both `MATCH_END` and budget paths;
 - deeply frozen, deep-equal results for identical seed/config and different transcripts for different seeds.
+
+## 24. Milestone 6 multiplayer server tests (implemented)
+
+### Engine projections (`packages/game-engine/tests/`)
+
+**Public view (`public-view.test.ts`, work unit 1):**
+
+- public players carry only id, name, connectivity, elimination, protection, victory tokens, hand **count**, and public discards as `{ value, type }` + origin — no `instanceId`, no card identity;
+- public round carries status, phase, current actor, turn order, draw-pile and hidden-card **counts**, the pending interaction's public observables (type/actor, plus the Pecera target id), and round winners — never the draw order, hidden card, detached Ratón card, insertion index, or Saqueadog choice;
+- combined-snapshot composition: round players carry transient fields while the match roster is authoritative for identity, connectivity, and current tokens (no array-index coupling); match-only projection when no round is attached;
+- exhaustion reveal inference: `ROUND_END` + empty pile + ≥2 survivors exposes every survivor's hand in round order; a last-survivor end reveals nothing (`null`); any other shape yields `null`;
+- purity: fresh objects on every projection, no aliasing in either direction.
+
+**Private view (`private-view.test.ts`, work unit 2):**
+
+- the viewer's own hand only (deep copies), exact canonical `legalActions`, and `pendingDecision` only while the viewer is the pending actor;
+- Ratón/Saqueadog private payloads (detached card, hidden card) appear only in the pending actor's view;
+- fail-closed authorization: a non-roster viewer throws `ProjectionError` with `PLAYER_NOT_IN_GAME` (round-side presence alone never authorizes);
+- fail-closed pending mapping: an unknown future variant throws `UNKNOWN_PENDING_INTERACTION` in both public and private projections;
+- empty `legalActions` without an active round, for a non-actor during a pending stage, and for an eliminated viewer.
+
+### Server (`apps/server/tests/`)
+
+**Room registry (`room-registry.test.ts`) and rate limiter (`join-rate-limiter.test.ts`), work unit 3:**
+
+- creation (creator as connected host seat 1, stable crypto-random `playerId`), codes over the exact 32-symbol 5-char Crockford alphabet with collision retries and bounded-generation failure, display-name normalization/rejection;
+- joining: 6-seat hard cap, non-joinable statuses, duplicate sockets, unique ids independent of socket ids;
+- reconnect tokens: raw token returned exactly once, registry retains only the SHA-256 hash (snapshots contain no token material), constant-time rebind without creating a player, rejection of invalid/foreign/replayed-alive/tampered tokens;
+- guarded transitions: forward-only lifecycle, host-only driving, 2-seat minimum for `IN_MATCH`, terminal `EXPIRED`;
+- explicit leave: socket-authenticated (no `playerId` eviction), `IN_MATCH` rejection with zero mutation, disconnect preserved as the mid-match pause path, host transfer to the earliest-joined connected seat (earliest-remaining fallback), last-leave room deletion, `FINISHED` leaves allowed;
+- limiter: budget/window defaults (8/60s), retry horizon inside the remaining window, per-key isolation, every attempt counted, injectable clock.
+
+**Game session (`game-session.test.ts`) and sanitizer (`public-events.test.ts`), work unit 4:**
+
+- session start: one per room code from a 2–6-seat LOBBY roster; rejection of duplicate starts, non-LOBBY rooms, bad rosters, and invalid seeds; invariant assertions before storing;
+- `handleCommand`: actor-spoofing rejection before the engine, `SESSION_NOT_FOUND`/`NO_ACTIVE_ROUND` guards, engine rejections returned typed and state-untouched, sanitized event batches, `roundAdvanced`/`matchEnded` flags;
+- per-session RNG: Card 7 plays safely with the session-owned stream; identical seeds reproduce identical command sequences;
+- round/match transitions: auto next-round setup with a random starter, ended-round retention at `MATCH_END`, `TOKEN_AWARDED`/`MATCH_ENDED` in result events;
+- transactional rollback: post-engine failures roll back state **and** the RNG stream, and a retry deterministically matches a fresh session with the same seed;
+- snapshot purity and connectivity overlay: tampering cannot corrupt the session, projecting never mutates authoritative state, out-of-roster viewers fail closed with `PLAYER_NOT_IN_GAME`;
+- sanitizer: exhaustive variant mapping to documented public shapes, JSON-safe output with no `instanceId` anywhere, batch ordering, fail-closed on unknown variants/malformed cards, runtime extra-field stripping, full input/output purity.
+
+**Gateway (`smoke.test.ts`, `gateway-room.test.ts`, `gateway-game.test.ts`, `gateway-reconnect.test.ts`), work unit 5 (real NestJS Socket.IO server, real socket.io-client connections):**
+
+- smoke: ephemeral-port boot, typed ping acks, concurrent independent clients, clean shutdown;
+- rooms: create-into-LOBBY with the creator hosting, join acks, `room:updated` broadcasts never carrying tokens, host-only start, bad-code/full-room/bad-name rejections, malformed-payload `INVALID_PAYLOAD` handling, unbound-socket rejections;
+- rate limiting over sockets: typed `RATE_LIMITED` ack after the budget, with already-bound gameplay unaffected;
+- leave: socket-authenticated explicit leave with host transfer broadcast, `IN_MATCH` leave rejection, last-seat room deletion;
+- game flow: initial-deal public/private fanout, legal-command acks with sanitized events and per-seat state refresh, out-of-turn/spoofed rejections without mutation, and a full socket-driven match to a real `match:ended` with `FINISHED` cleanup on subsequent leaves;
+- reconnect: disconnect overlay + broadcast updates without elimination, token rebind restoring room/public/private state (pending restoration included), wrong-token/still-connected/nonempty-token rejections, no new-seat joins to a running match.
+
+### Final socket acceptance (`multiplayer-e2e.test.ts`, work unit 6)
+
+One real Socket.IO server, one full match per player count 2/3/4/5/6, driven exclusively through the public socket contract (the harness never inspects canonical state or imports the runner). Per match, asserted:
+
+- every ack succeeds and exactly one seat is authorized per command (never zero, never two at the same generation);
+- the final ack sets `matchEnded`, at least one earlier ack shows `roundAdvanced`, and exactly one `match:ended` per seat carries in-roster winners with the room at `FINISHED`;
+- public-channel payloads (acks, `game:event`, `game:public-state`, `room:updated`, `match:ended`) contain none of `instanceId`, `reconnectToken`, `cardInstanceId`, `"pendingDecision"`, `"legalActions"`, `"hiddenCard"`;
+- every private fanout addresses the right seat (`roomCode`, `playerId`, `viewerId` all match) with exactly one generation per command plus the initial deal;
+- hand `instanceId`s are disjoint across seats at every generation — no client ever holds another seat's hand identities.
+
+Observed evidence: 5/5 matches (one per player count) passed in 3 repeated runs.
+
+### Milestone 6 verification summary
+
+| Suite | Result |
+|---|---|
+| Server (`apps/server`) | 9 suites / 139 tests — green |
+| Engine (`packages/game-engine`), including the default 1,000-match corpus | 23 suites / 523 tests — green |
+| Combined | 662 tests — green |
+| `multiplayer-e2e.test.ts` repeated runs (2–6 clients) | 3/3 runs green |
+| `npm run build`, `npm run lint`, `npm run format:check` | clean |
+| `jest --detectOpenHandles` (server) | clean |

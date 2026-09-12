@@ -291,29 +291,60 @@ A small dispatch switch/map is acceptable.
 
 The canonical server state must never be sent directly to clients.
 
-Create projections:
+Implemented (Milestone 6) in `packages/game-engine/src/views.ts` over the combined canonical snapshot §14.1. The projections are pure: every call returns fresh plain objects, no input object or array is aliased, and mutating either side after projection never affects the other.
 
 ```ts
-getPublicGameView(state)
-getPlayerPrivateView(state, playerId)
+getPublicGameView(snapshot: GameSnapshot): PublicGameView
+getPlayerPrivateView(snapshot: GameSnapshot, playerId: PlayerId): PrivateGameView
 ```
 
-A player-private view may include:
+A player-private view includes:
 
-- that player's hand;
-- private card information currently being inspected;
-- legal decisions for a pending interaction.
+- that player's hand (deep copies, `viewerId`'s own cards only);
+- the exact canonical `legalActions` for the viewer (`getLegalActions(round, viewerId)`; empty without an attached active round, for a non-actor during a pending stage, or for an eliminated viewer);
+- private pending data (`pendingDecision`) only while the viewer is the pending actor: the detached Ratón card on `RATON_INSERT_POSITION`, the hidden card on `SAQUEADOG_SWAP`.
 
-A public view may include:
+A public view includes:
 
-- players;
-- elimination state;
-- protection state;
-- public discards;
-- deck count;
-- hidden card existence, but not identity;
-- current turn;
-- scores.
+- players: id, name, connectivity, elimination state, protection state, victory tokens, hand **count**, public discards as `{ value, type }` pairs plus origin;
+- the round: status, phase, current actor, turn order, round number, draw-pile **count**, hidden-card **count** (0/1, never identity), the pending interaction's type and actor (plus the Pecera target id), round winners, and the exhaustion reveal §14.3;
+- the match frame: id, status, round number, winners.
+
+Never exposed anywhere public: the draw order, hidden card identity, any hidden hand identity, the detached Ratón card, the chosen Ratón insertion index, the Saqueadog hidden card or swap choice, commands, or legal actions.
+
+### 14.1 Combined GameSnapshot input
+
+Projections take one canonical pairing, not a bare state:
+
+```ts
+interface GameSnapshot {
+  match: MatchState;       // token source of truth, roster, connectivity
+  round: RoundState | null; // the live round, or null between rounds / after MATCH_END
+}
+```
+
+With a round attached, the `players` composition layers two sources: the round's players (in round order) carry the round-owned transient fields — elimination, protection, hand count, public discards — while the match roster keyed by id is authoritative for identity, connectivity (name, `connected`), and the current `victoryTokens`. An attached `ROUND_END` therefore simultaneously shows the tokens the applied round result awarded on the match and the round's public discards, with no array-index coupling between the rosters. With no round attached, the match's players are projected directly (lobby, between rounds, and match end). A malformed roster mismatch falls back to the round's own values per field; projection never validates or rejects.
+
+### 14.2 Player-private projection and typed failures
+
+Authorization runs against the match roster and fails closed: a `playerId` not in the match roster (the single authorization surface — round-side presence alone never authorizes a viewer) throws a typed `ProjectionError` with the stable code `PLAYER_NOT_IN_GAME`, never a null or public fallback.
+
+The pending mapping is exhaustive and fails closed symmetrically with the public projection: any future pending variant the projection does not know how to project safely throws `ProjectionError` with code `UNKNOWN_PENDING_INTERACTION` instead of silently emitting an unsafe shape.
+
+```ts
+type ProjectionErrorCode = 'PLAYER_NOT_IN_GAME' | 'UNKNOWN_PENDING_INTERACTION';
+class ProjectionError extends Error { readonly code: ProjectionErrorCode }
+```
+
+### 14.3 Exhaustion reveal inference in the public view
+
+The public round view carries `revealedHands: PublicRevealedHand[] | null`, inferred from canonical round state (rules §9) so late-joining or reconnecting clients see the same reveal the live `HANDS_REVEALED` event delivered:
+
+- `ROUND_END` + empty draw pile + two or more active players ⇒ every survivor's single hand card is public, as `{ playerId, card: { value, type } }` pairs in round player order, mirroring the canonical emission;
+- a last-survivor `ROUND_END` wins immediately with no reveal, so its hand is never exposed (`null`);
+- any other shape yields `null`.
+
+The reveal is a projection over hands that stay in place — it moves no cards and never touches discards.
 
 ## 15. Legal-action computation
 
@@ -467,6 +498,8 @@ Implemented typed failures (Milestone 5):
 Do not couple the engine to database persistence.
 
 The server may persist snapshots/events outside the engine.
+
+Milestone 6 keeps everything in memory (multiplayer spec §16): no TTL, expiry, persistence, or cross-process recovery exists yet; that is explicitly deferred to later milestones.
 
 ## 23. Serialization
 

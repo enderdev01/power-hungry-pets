@@ -153,7 +153,7 @@ Run at least 1,000 legal simulated matches.
 
 ---
 
-## Milestone 6 — Multiplayer server
+## Milestone 6 — Multiplayer server (complete)
 
 NestJS:
 
@@ -168,9 +168,26 @@ NestJS:
 - reconnect token;
 - reconnect state restoration.
 
+All items are implemented; see the multiplayer architecture doc (docs/05_MULTIPLAYER_ARCHITECTURE.md) for the authoritative implemented contract and docs/07_TEST_PLAN.md §24 for the test evidence.
+
+### Completed work units
+
+| Work unit | Deliverable | Tests |
+|---|---|---|
+| 1 | Combined-snapshot public projection: `GameSnapshot` pairing plus `getPublicGameView` in `packages/game-engine/src/views.ts` (engine spec §14.1) | `packages/game-engine/tests/public-view.test.ts` |
+| 2 | Player-private projection: `getPlayerPrivateView`, `PrivateGameView`, and typed `ProjectionError` (`PLAYER_NOT_IN_GAME`, `UNKNOWN_PENDING_INTERACTION`) in `packages/game-engine/src/views.ts` (engine spec §14.2) | `packages/game-engine/tests/private-view.test.ts` |
+| 3 | In-memory room registry (guarded lifecycle, 32-symbol room codes, socket bindings, SHA-256-only reconnect tokens, host transfer) and the per-socket join rate limiter (8/60s) in `apps/server/src/room/` and `apps/server/src/gateway/join-rate-limiter.ts` | `apps/server/tests/room-registry.test.ts`, `apps/server/tests/join-rate-limiter.test.ts` |
+| 4 | Authoritative game-session aggregate (transactional `handleCommand`, per-session engine RNG, invariants, auto-round) plus the fail-closed public-event sanitizer in `apps/server/src/session/` and `apps/server/src/projection/public-events.ts` | `apps/server/tests/game-session.test.ts`, `apps/server/tests/public-events.test.ts` |
+| 5 | Real NestJS Socket.IO gateway with typed ack envelopes, runtime payload guards, socket-authenticated membership, and public/private fanout in `apps/server/src/gateway/` (engine spec, multiplayer spec §§4–15) | `apps/server/tests/smoke.test.ts`, `apps/server/tests/gateway-room.test.ts`, `apps/server/tests/gateway-game.test.ts`, `apps/server/tests/gateway-reconnect.test.ts` |
+| 6 | Final socket acceptance harness: real Socket.IO clients driving full matches for 2–6 players through the public contract only | `apps/server/tests/multiplayer-e2e.test.ts` |
+
 ### Exit criteria
 
-2–6 simulated socket clients can complete matches.
+- [x] 2–6 simulated socket clients can complete matches: the acceptance harness (`multiplayer-e2e.test.ts`, one real Socket.IO server, one match per player count 2/3/4/5/6) drives every match exclusively through `room:create`, `room:join`, `room:start`, and `game:command`, asserting per match that every ack succeeds, exactly one seat is authorized per command, `match:ended` occurs, the room reaches FINISHED with in-roster winners, public payloads carry no `instanceId`/reconnect tokens/private state, private fanouts address the right viewer, and no client ever sees another seat's hand identities. Observed passing in 3 repeated runs.
+- [x] Server suite green: 9 suites / 139 tests (registry, limiter, session, sanitizer, gateway room/game/reconnect, smoke, e2e).
+- [x] Engine suite green: 23 suites / 523 tests, including the default 1,000-match simulation corpus.
+- [x] Combined 662 tests green; forced `build`, `lint`, `format:check`, and `jest --detectOpenHandles` all clean.
+- [x] Explicitly deferred to later milestones (see docs/09_OPEN_QUESTIONS.md): room TTL/expiry, per-IP/proxy-aware rate limiting, persistence, rematch, spectators, and the frontend (Milestones 7–9).
 
 ---
 

@@ -96,6 +96,63 @@ Historical context: the original rules specification did not define who starts t
 
 **Status:** Resolved by project decision (Milestone 5).
 
+## Resolved for Milestone 6 (multiplayer server)
+
+The following were decided while implementing Milestone 6; the implemented behavior in `apps/server` and `packages/game-engine/src/views.ts` is authoritative (see docs/05_MULTIPLAYER_ARCHITECTURE.md and docs/04_GAME_ENGINE_SPEC.md §14).
+
+### Room code format
+
+**Decision:** Room codes are 5 characters over a 32-symbol unambiguous alphabet: Crockford base32 — digits `0-9` plus `A-Z` without `I`, `L`, `O`, `U` — so every glyph maps to exactly one symbol (no O/0, I/L/1, or U/V confusion). Codes are crypto-random, collision-checked with bounded retries, and are matchmaking handles, not security credentials.
+
+**Status:** Resolved by project decision (Milestone 6).
+
+### Reconnect token handling
+
+**Decision:** Tokens are 32 crypto-random bytes, base64url-encoded, handed to the client exactly once at create/join. The registry retains only the SHA-256 hash and verifies reconnects by constant-time hash comparison (`timingSafeEqual`); no snapshot ever contains token material. There is no token expiry: a token is valid for the in-memory lifetime of its room.
+
+**Status:** Resolved by project decision (Milestone 6).
+
+### Client event granularity
+
+**Decision:** One gameplay event, `game:command`, carrying the exact engine `TurnCommand`, instead of per-action event names (`game:draw`, `game:play-card`, …). The gateway validates command shape only; the session validates semantics. The speculative `match:rematch` event is not implemented.
+
+**Status:** Resolved by project decision (Milestone 6).
+
+### Disconnect during a match
+
+**Decision:** No grace timer, no forfeit, no auto-play, no turn skip. A disconnect only flips the seat's transport `connected` overlay; the seat, token, and host status are retained and the engine waits for the player's legal action or pending decision. Explicit `room:leave` is rejected during `IN_MATCH` (disconnect is the supported pause path); leaves are allowed in `CREATED`, `LOBBY`, and `FINISHED`, and the last seat leaving deletes the room and its session.
+
+**Status:** Resolved by project decision (Milestone 6). The broader timeout/forfeit product question remains open under "Disconnect forfeit" below.
+
+### Host transfer on leave
+
+**Decision:** When the host explicitly leaves, host privileges transfer to the earliest-joined connected remaining seat, falling back to the earliest remaining seat when none are connected. Disconnect never transfers the host role.
+
+**Status:** Resolved by project decision (Milestone 6).
+
+### Exhaustion reveal in reconnected/late views
+
+**Decision:** The public projection infers the draw-pile-exhaustion reveal from canonical state (`ROUND_END` + empty draw pile + ≥2 active players ⇒ survivor hands exposed as value/type pairs; a last-survivor end reveals nothing) so clients that missed the live `HANDS_REVEALED` event — late joiners, reconnecting seats — see the same reveal.
+
+**Status:** Resolved by project decision (Milestone 6).
+
+### Join rate limiting scope
+
+**Decision:** The MVP limiter keys per socket connection: 8 `room:join` attempts per 60 s sliding window, counted before payload validation. It never limits already-bound gameplay. Per-remote-address keying and proxy-aware trusted-address extraction are deliberately deferred to a later milestone, where the real client address can be trusted at the transport/proxy layer (the existing class can be reused with an address key unchanged).
+
+**Status:** Resolved by project decision (Milestone 6); address/proxy hardening deferred (Milestone 9).
+
+## Explicitly deferred from Milestone 6
+
+Deliberate deferrals recorded so later milestones pick them up intentionally (docs/05_MULTIPLAYER_ARCHITECTURE.md §19, implementation plan Milestones 7–9):
+
+- **Room TTL / expiry / token expiry** — none exists; rooms and tokens live for the process lifetime, and the `EXPIRED` status is reachable only in principle.
+- **Per-IP / proxy-aware rate limiting** — per-socket limiting only (see above).
+- **Persistence** — everything is in-memory; a restart loses rooms, sessions, and tokens.
+- **Rematch** — `FINISHED` is terminal short of `EXPIRED`; no rematch flow or event exists.
+- **Spectators** — every seat is a player; no observer role exists.
+- **Frontend** — Milestone 7; the socket contract is exercised only by real Socket.IO test clients.
+
 ## Still open
 
 ### Exact visual assets
@@ -108,9 +165,9 @@ Development should use placeholders or assets the project is authorized to use.
 
 No rule currently specifies what happens when a disconnected player does not return.
 
-MVP should preserve the seat and pause/offer room-level handling rather than auto-play cards.
+Milestones 5–6 preserve the seat, token, and host status on disconnect and pause rather than auto-play cards; explicit leave is rejected mid-match.
 
-A later product decision may add a timeout/forfeit policy.
+A later product decision may add a timeout/forfeit policy (Milestone 9 candidate).
 
 ## How to add a question
 
