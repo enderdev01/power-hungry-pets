@@ -9,7 +9,10 @@ export interface FirstPlayerPolicyContext {
 
 export type FirstPlayerPolicy = (context: FirstPlayerPolicyContext) => PlayerId;
 
-/** Temporary default from the open-questions document; replace when official rules are decided. */
+/**
+ * Resolved M5 first-player policy: every round — including the first — draws
+ * its starter with this policy through the injected engine RNG.
+ */
 export const randomFirstPlayerPolicy: FirstPlayerPolicy = ({ playerIds, rng }) => {
   return playerIds[Math.floor(rng.next() * playerIds.length)];
 };

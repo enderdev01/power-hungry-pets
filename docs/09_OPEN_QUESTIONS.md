@@ -88,23 +88,15 @@ Card 0 (Robot Aspirador Real) has no face-up printed action. Its only rule contr
 
 **Status:** Resolved by authoritative user decision (Milestone 4).
 
-## Still open
-
 ### First player of a new match / next round
 
-The supplied rules in the current specification do not define who starts:
+**Decision:** Every round — including the first — gets a starter drawn randomly from the engine's RNG stream. The implementation ships `randomFirstPlayerPolicy` as the default first-player policy, injectable through the `firstPlayerPolicy` seam (`MatchRunnerInput.firstPlayerPolicy` forwarded to `setupRound` unchanged), and previous round winners never influence the starter. The runner records each round's starter in the transcript and summary for reproducibility.
 
-- the first round;
-- subsequent rounds.
+Historical context: the original rules specification did not define who starts the first or subsequent rounds, so the question was parked with a temporary development default (random first round, previous winner afterwards). That temporary default is superseded by the decision above and was never treated as official physical-game canon.
 
-Until clarified, implement the start-player policy behind a replaceable strategy/configuration instead of scattering assumptions.
+**Status:** Resolved by project decision (Milestone 5).
 
-Suggested temporary development default:
-
-- first round: random player using server RNG;
-- later rounds: previous round winner, with deterministic selection if there are multiple winners.
-
-Do not treat this temporary default as official physical-game canon.
+## Still open
 
 ### Exact visual assets
 

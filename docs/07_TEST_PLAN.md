@@ -252,15 +252,55 @@ Useful invariant checks after every command:
 - current player is active;
 - no unresolved pending interaction is bypassed.
 
+Implemented as the typed invariant API (engine spec §20.1): `assertRoundInvariants`/`assertMatchInvariants` throw a single `InvariantViolationError` aggregating every stable-coded violation, and the finders stay pure and read-only. Covered in `tests/invariants.test.ts`: every real engine flow (all card paths, both round-end paths, the next round after a result) is accepted, while single-card and single-structural corruptions are each flagged with the correct code.
+
 ## 22. Simulation tests
 
-Once basic tests pass, simulate large numbers of seeded matches.
+Implemented as the deterministic simulation corpus (`tests/simulation.test.ts`, Milestone 5 work unit 4).
 
-Target:
+Command:
 
-- at least 1,000 deterministic random legal simulations during development;
-- no invariant violations;
-- no impossible state;
-- every simulation reaches a round/match termination condition.
+```bash
+npx jest --config jest.config.cjs --runInBand tests/simulation.test.ts
+```
+
+`SIMULATION_MATCH_COUNT` (positive integer, default 1000) controls the corpus size; unset or blank falls back to 1000 and CI can shrink or grow it deliberately (a reduced corpus logs a warning).
+
+Verified properties:
+
+- the corpus uses stable seeds (base 1,000 + index) spread deterministically across player counts 2–6;
+- every run reaches `MATCH_END` with nonempty, distinct, roster-member winners;
+- transcript accounting is coherent: one `COMMAND` entry per applied command, one `ROUND_RESULT` per ended round, per-round command/event counts matching the summary, consecutive round numbers, and all event sums reconciling to `totalEvents`;
+- no run throws a `SimulationError`, turn-engine rejection, or invariant failure (throws escape with seed and playerCount diagnostics);
+- both round-end paths occur across the corpus: at least one exhaustion-reveal round (`HANDS_REVEALED` during the round's commands) and at least one last-survivor round (no reveal in that round);
+- determinism is verified by bounded deep-equal replay of representative samples (one per player count plus the middle and last corpus indices), not by doubling the whole corpus.
+
+Observed evidence: 1,000/1,000 corpus matches reached `MATCH_END` across player counts 2–6, exercising both the exhaustion-reveal and last-survivor round-end paths, with zero thrown invariant/engine errors.
 
 Simulation is supplementary; it does not replace explicit rules tests.
+
+## 23. Milestone 5 hardening tests
+
+Implemented in `tests/legal-actions.test.ts`, `tests/simulation-policy.test.ts`, and `tests/match-runner.test.ts`.
+
+### Legal actions (`getLegalActions`)
+
+- terminal and actor guards return empty (ended rounds, wrong/unknown/eliminated actors);
+- per-stage pending expansion and the `PLAY_REQUIRED` hand expansion (including the targetless fizzle and the exclusion of self/protected/eliminated targets);
+- canonical stable ordering by command type, card, target, index, and value, deterministic across repeated calls;
+- purity (input never mutated) and round-trip of every generated action through `applyTurnCommand`;
+- curated illegal inputs remain rejected (protected/self/eliminated targets, guess value 1 and out-of-range values, out-of-range insertion indices, wrong pending-stage commands, Card 7 without the engine RNG).
+
+### Action policy and RNG streams
+
+- `selectLegalAction` chooses exactly one canonical action with exactly one RNG draw and raises the typed `SimulationPolicyError` (`NO_LEGAL_ACTIONS`) on an empty list;
+- `(seed, streamName)` derivation is reproducible and independent across streams (`engine` vs `policy`).
+
+### Simulation runner (`runMatch`)
+
+- complete matches for every generated player count 2–6 and explicit rosters, with a typed guard per invalid input (playerCount bounds, missing/ambiguous roster, malformed/duplicate/empty explicit ids, untouched caller roster);
+- fresh starter for every round through the engine RNG: the same seed replays the same starter sequence, and the starter is not inherited from the previous round's winners;
+- graceful budget termination (`ROUND_BUDGET_EXCEEDED`, `COMMAND_BUDGET_EXCEEDED`) with correct partial-round event accounting, plus typed deadlock detection (`NO_LEGAL_ACTIONS`) and generated-action rejection mapping (`GENERATED_ACTION_REJECTED` with engine code and command);
+- invariant assertions around every transition (round after setup/every command/round end; match after creation/every applied result);
+- transcript entry-per-command/result accounting and transcript-wide event totals on both `MATCH_END` and budget paths;
+- deeply frozen, deep-equal results for identical seed/config and different transcripts for different seeds.

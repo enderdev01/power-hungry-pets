@@ -6,6 +6,33 @@ export type {
   FaceUpCardEffectContext,
 } from './card-effects';
 export { shuffleDeck } from './deck';
+export {
+  assertMatchInvariants,
+  assertRoundInvariants,
+  findMatchInvariantViolations,
+  findRoundInvariantViolations,
+  InvariantViolationError,
+} from './invariants';
+export type {
+  InvariantCode,
+  InvariantViolation,
+  MatchInvariantCode,
+  RoundInvariantCode,
+} from './invariants';
+export { getLegalActions } from './legal-actions';
+export { runMatch, SimulationError, DEFAULT_MATCH_RUNNER_CONFIG } from './match-runner';
+export type {
+  CommandTranscriptEntry,
+  MatchRunnerConfig,
+  MatchRunnerInput,
+  MatchSimulationResult,
+  MatchSimulationSummary,
+  MatchTerminationMode,
+  RoundResultTranscriptEntry,
+  RoundSimulationSummary,
+  SimulationErrorCode,
+  SimulationTranscriptEntry,
+} from './match-runner';
 export { applyRoundResult, MatchResolutionError, victoryThresholdFor } from './match-rules';
 export type {
   MatchEndedEvent,
@@ -53,6 +80,14 @@ export type {
   RoundRulesEvent,
 } from './round-rules';
 export { createMatchState, setupRound } from './setup';
+export {
+  createRngStream,
+  ENGINE_STREAM,
+  POLICY_STREAM,
+  selectLegalAction,
+  SimulationPolicyError,
+} from './simulation-policy';
+export type { SimulationPolicyErrorCode } from './simulation-policy';
 export { randomFirstPlayerPolicy } from './turn-order';
 export type { FirstPlayerPolicy, FirstPlayerPolicyContext } from './turn-order';
 export { applyTurnCommand } from './turn-engine';

@@ -332,6 +332,36 @@ For target-requiring cards (1, 3, 5, 8), legal-action computation must distingui
 - when no legal target exists, playing the card remains valid and its targeting effect resolves as a no-op;
 - when at least one legal target exists, selecting an illegal target (self, eliminated, protected) must fail with the typed error (`ILLEGAL_TARGET` / `TARGET_PROTECTED`).
 
+### 15.1 Implemented canonical generator (Milestone 5)
+
+`getLegalActions(round: RoundState, actorId?: PlayerId): TurnCommand[]` is implemented in `packages/game-engine/src/legal-actions.ts` as a pure projection of the current round state onto the exact `TurnCommand` objects the turn engine accepts. Legality stays single-sourced in the turn engine's validators and the centralized target-protection seams (`classifyHandTarget`, `hasLegalHandTarget`); the generator owns enumeration and canonical ordering only.
+
+The actor defaults to the round's current player. Terminal and guard results are empty:
+
+- ended rounds (`status !== 'ROUND_ACTIVE'`);
+- wrong actor (not the current player while no pending interaction is open);
+- eliminated or unknown actors;
+- impossible draw states (`DRAW_REQUIRED` with an empty draw pile).
+
+While a pending interaction is open for the actor, only that stage's decision commands are generated:
+
+| Pending stage | Generated commands |
+|---|---|
+| `PECERA_TARGET` | `CHOOSE_TARGET` for every canonical legal target |
+| `PECERA_GUESS` | `SUBMIT_GUESS` with values 0 and 2..10 (prohibited value 1 is a curated illegal input, never generated) |
+| `RATON_INSERT_POSITION` | `CHOOSE_DECK_POSITION` with every insertion index `0..drawPile.length` |
+| `SAQUEADOG_SWAP` | `CHOOSE_HIDDEN_SWAP` with `swap: false` and `swap: true` |
+
+In `PLAY_REQUIRED` (no pending interaction), every hand card becomes one `PLAY_CARD` action:
+
+- target-bearing cards (3, 5, 8) expand to one action per canonical legal target when at least one exists;
+- a target-bearing card with no legal target yields exactly one targetless fizzle action (the engine waives the target requirement);
+- non-target cards never carry a stray `targetId`.
+
+Canonical ordering is a stable sort by command type rank — `CHOOSE_DECK_POSITION` (0), `CHOOSE_HIDDEN_SWAP` (1), `CHOOSE_TARGET` (2), `DRAW_CARD` (3), `PLAY_CARD` (4), `SUBMIT_GUESS` (5) — then by card instance id, target id, deck index, and guess value, so identical inputs always produce identical sequences.
+
+The returned commands are fresh plain objects built from public state only; they never alias or leak private card identities and never mutate the input state. Every generated action round-trips through `applyTurnCommand`: a rejection is always the caller's curated illegal input, never a generated one.
+
 ## 16. Protection helper
 
 Use one canonical rule for protection checks.
@@ -390,11 +420,28 @@ Assertions should verify, at least in development/tests:
 - protected flag belongs only to an active player;
 - public/private projections do not expose unauthorized hidden cards.
 
+### 20.1 Implemented invariant API (Milestone 5)
+
+The checks are implemented in `packages/game-engine/src/invariants.ts` as pure, read-only predicates over canonical `RoundState`/`MatchState`:
+
+```ts
+findRoundInvariantViolations(round): readonly InvariantViolation[]
+assertRoundInvariants(round): void // throws InvariantViolationError
+findMatchInvariantViolations(match): readonly InvariantViolation[]
+assertMatchInvariants(match): void // throws InvariantViolationError
+```
+
+- `InvariantViolation` carries a stable `code` plus a human-readable `detail`; the typed `InvariantViolationError` aggregates every detected violation in one place.
+- Round codes: `CARD_CONSERVATION`, `REY_GATO_UNIQUENESS`, `ELIMINATED_PLAYER_STATE`, `CURRENT_ACTOR_STATE`, `PHASE_STRUCTURE`, `PENDING_STRUCTURE`, `ROUND_END_STRUCTURE`, `STATE_SHAPE`.
+- Match codes: `MATCH_ROSTER`, `MATCH_TOKENS`, `MATCH_STATUS`, `MATCH_WINNERS`.
+- The checks understand every valid transitional state the engine produces: card conservation across hands, discards, draw pile, hidden card, and the detached Ratón pending card; open pending interactions (phase `PLAY_REQUIRED`, the pending actor is the current player holding one card like every other active player); and `MATCH_END` winners that are complete, distinct, and at or above the victory threshold.
+- A corrupted (out-of-contract) state yields violations instead of exceptions wherever detectable; the input state is never mutated.
+
 ## 21. Error model
 
-Use typed domain errors.
+Use typed domain errors. There are two disjoint families: turn-engine command rejections carry a `TurnErrorCode`, and match-level resolution rejections raise `MatchResolutionError` with its own `MatchResolutionErrorCode` values. The turn engine never emits match-resolution codes.
 
-Examples:
+Turn-engine `TurnErrorCode` examples:
 
 ```ts
 NOT_YOUR_TURN
@@ -406,8 +453,14 @@ INVALID_GUESS
 PENDING_DECISION_REQUIRED
 UNEXPECTED_COMMAND
 ROUND_ALREADY_ENDED
-MATCH_ALREADY_ENDED
 ```
+
+Implemented typed failures (Milestone 5):
+
+- the turn engine rejects commands with the `TurnErrorCode` codes above plus `DRAW_PILE_EMPTY`, `INVALID_SWAP_CHOICE`, `INVALID_POSITION`, and `MISSING_RNG` (Card 7 played without the engine RNG dependency);
+- match-level resolution (`applyRoundResult`) raises `MatchResolutionError` with the stable codes `MATCH_ALREADY_ENDED`, `ROUND_MATCH_MISMATCH`, `ROUND_NOT_ENDED`, `ROSTER_MISMATCH`, `ROUND_NUMBER_NOT_MONOTONIC`, `ROUND_WINNERS_EMPTY`, `ROUND_WINNERS_DUPLICATED`, and `ROUND_WINNER_NOT_IN_ROSTER` — including the match-end guard that rejects further round results once the match is in `MATCH_END` (§24);
+- the simulation runner raises `SimulationError` with stable codes `INVALID_RUNNER_INPUT`, `NO_LEGAL_ACTIONS`, and `GENERATED_ACTION_REJECTED` (carrying the engine rejection code and the rejected command);
+- the action policy raises `SimulationPolicyError` with `NO_LEGAL_ACTIONS`.
 
 ## 22. Persistence principle
 
@@ -434,3 +487,30 @@ The match is the token source of truth. When a round ends, a pure match-level re
 5. Otherwise the match status becomes `ROUND_END` and the next round begins.
 
 While the match is in `MATCH_END`, no further round results can be applied: the match-end guard rejects them transactionally.
+
+## 25. Deterministic simulation runner (Milestone 5)
+
+`runMatch(input: MatchRunnerInput): MatchSimulationResult` (implemented in `packages/game-engine/src/match-runner.ts`) hosts the existing engine unchanged and drives complete deterministic matches: create the match, then repeatedly set up rounds and drive them — through the canonical legal-action generator and the deterministic one-draw action policy — until every round reaches `ROUND_END`, applying round results until `MATCH_END`.
+
+### Decisions at a glance
+
+| Topic | Decision |
+|---|---|
+| Randomness separation | Two independent `SeededRng` streams are derived reproducibly from `(seed, streamName)` through a deterministic FNV-1a-style hash plus an avalanche mix: the `engine` stream (deck shuffle, every round starter, card-effect randomness such as Card 7) and the `policy` stream (exactly one draw per action decision). Action-selection changes can never perturb engine, deck, or card-effect randomness. |
+| Round starter | Every round — including the first — draws a fresh random starter from the engine RNG (`randomFirstPlayerPolicy` by default, injectable through `firstPlayerPolicy` without changing setup). Previous winners never influence the starter. |
+| Action policy | `selectLegalAction` reduces `getLegalActions`' canonical list with exactly one RNG draw; legality and ordering stay single-sourced in the legal-action generator. |
+| Failure discipline | An engine-rejected generated action raises the typed `SimulationError` with `GENERATED_ACTION_REJECTED` (carrying the engine rejection code and the rejected command); an empty legal-action list while a round is active raises `NO_LEGAL_ACTIONS`. The runner never retries, mutates around, or hides an engine rejection. |
+| Budgets | `maxRounds` and `maxCommandsPerRound` (both positive integers, defaults 1,000/1,000 in the frozen `DEFAULT_MATCH_RUNNER_CONFIG`). Exhausting a budget ends the run gracefully with `ROUND_BUDGET_EXCEEDED` or `COMMAND_BUDGET_EXCEEDED` — it is never an error. |
+| Input guards | Nonnegative integer seed; exactly one of `players` (2–6 entries with unique nonempty string ids, copied so the caller's array is never mutated) or `playerCount` (2–6, generated roster `p1..pN`); positive-integer config. Every violation is normalized to the typed `INVALID_RUNNER_INPUT` error. |
+| Determinism | Same seed and config always replay a deep-equal, deeply frozen summary and transcript. |
+
+### Invariant assertions around every transition
+
+- after match creation and every applied round result: `assertMatchInvariants`;
+- after round setup, every successful command, and every ended round: `assertRoundInvariants`.
+
+### Transcript and summary
+
+- One `COMMAND` transcript entry per applied command (round number, command, public events) and one `ROUND_RESULT` entry per ended round (round number, starter, winners, result events).
+- The summary carries seed, match id, player count, termination mode, match status, winners, rounds played, per-round starter/winners/command/event counts, total commands, and the transcript-wide event total (including events from a partial round under budget termination).
+- Per-round accounting always reconciles: command entries, round-result entries, round numbers, and event sums reproduce the summary totals.

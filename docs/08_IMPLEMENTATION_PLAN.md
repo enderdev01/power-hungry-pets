@@ -125,7 +125,7 @@ All round/match tests pass.
 
 ---
 
-## Milestone 5 — Simulation hardening
+## Milestone 5 — Simulation hardening (complete)
 
 Implement:
 
@@ -135,9 +135,21 @@ Implement:
 
 Run at least 1,000 legal simulated matches.
 
+### Completed work units
+
+| Work unit | Deliverable | Tests |
+|---|---|---|
+| 1 | Canonical legal-action generator: `getLegalActions` in `packages/game-engine/src/legal-actions.ts` (engine spec §15.1) | `tests/legal-actions.test.ts` |
+| 2 | Typed invariant API: `find*/assert*Invariants` and `InvariantViolationError` in `packages/game-engine/src/invariants.ts` (engine spec §20.1) | `tests/invariants.test.ts` |
+| 3 | Deterministic one-draw action policy with separated RNG streams (`simulation-policy.ts`) plus the complete runner `runMatch` (`match-runner.ts`) (engine spec §25) | `tests/simulation-policy.test.ts`, `tests/match-runner.test.ts` |
+| 4 | Deterministic >=1,000-match simulation corpus (`tests/simulation.test.ts`) with `SIMULATION_MATCH_COUNT` (default 1000) (test plan §22) | `tests/simulation.test.ts` |
+
 ### Exit criteria
 
-No invariant violation.
+- [x] No invariant violation: round invariants are asserted after every round setup, every successful command, and every ended round; match invariants after match creation and every applied round result.
+- [x] At least 1,000 legal simulated matches ran clean: 1,000/1,000 corpus matches reached `MATCH_END` across player counts 2–6, exercising both the exhaustion-reveal and last-survivor round-end paths, with zero thrown `SimulationError`, turn-engine rejection, or invariant failure.
+- [x] All Milestone 5 test suites pass: the four M5 focused suites (`legal-actions`, `invariants`, `simulation-policy`, `match-runner`) contain 142 declared tests, plus the 5-test corpus suite (`simulation`). Current aggregate suite: 465 tests across 21 suites.
+- [x] Same seed and config replay a deep-equal, deeply frozen summary and transcript.
 
 ---
 
