@@ -1,0 +1,13 @@
+{
+  "name": "@power-hungry-pets/game-engine",
+  "version": "0.0.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "jest --config jest.config.cjs --runInBand",
+    "lint": "eslint src tests",
+    "format:check": "prettier --check src tests"
+  }
+}

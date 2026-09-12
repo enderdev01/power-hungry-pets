@@ -1,0 +1,13 @@
+{
+  "name": "@power-hungry-pets/web",
+  "version": "0.0.0",
+  "private": true,
+  "dependencies": {
+    "@power-hungry-pets/shared": "0.0.0"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint src",
+    "format:check": "prettier --check src"
+  }
+}

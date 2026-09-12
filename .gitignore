@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+# Local development and agent runtime state
+.DS_Store
+.atl/
+.codegraph/

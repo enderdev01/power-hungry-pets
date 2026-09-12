@@ -1,0 +1,10 @@
+{
+  "name": "@power-hungry-pets/server",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc -b",
+    "lint": "eslint src",
+    "format:check": "prettier --check src"
+  }
+}
