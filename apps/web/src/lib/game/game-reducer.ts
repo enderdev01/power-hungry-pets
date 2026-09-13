@@ -5,6 +5,7 @@
  * and records match end. It never computes rules and never invents state.
  */
 import type { GamePublicEvent, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
+import { nextRoundResult, type RoundResultEvidence } from './round-result';
 
 /** Maximum number of animation-only events retained for the feed. */
 export const GAME_EVENT_LOG_LIMIT = 20;
@@ -21,6 +22,14 @@ export interface GameState {
   matchWinners: string[];
   /** Bounded, animation-only feed of sanitized public events. */
   recentEvents: GamePublicEvent[];
+  /**
+   * WU9: evidence of the last announced round end, captured only from an
+   * atomic `game:event` batch that carried ROUND_ENDED without MATCH_ENDED
+   * (match-ending presentation belongs to WU10). Cleared when actual gameplay
+   * resumes via the next non-round-end event batch; projections alone never
+   * touch it.
+   */
+  roundResult: RoundResultEvidence | null;
 }
 
 export type GameAction =
@@ -38,6 +47,7 @@ export function createInitialGameState(): GameState {
     matchEnded: false,
     matchWinners: [],
     recentEvents: [],
+    roundResult: null,
   };
 }
 
@@ -51,6 +61,11 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return {
         ...state,
         recentEvents: [...state.recentEvents, ...action.events].slice(-GAME_EVENT_LOG_LIMIT),
+        // WU9: a ROUND_ENDED batch (without MATCH_ENDED) captures and re-arms
+        // the round result; any other event batch means actual gameplay
+        // resumed and clears it. Projections alone never touch it, so the
+        // server's immediate post-result fanout cannot erase the slip.
+        roundResult: nextRoundResult(state.roundResult, action.events, state.publicView),
       };
     case 'game/match-ended':
       return { ...state, matchEnded: true, matchWinners: [...action.winners] };

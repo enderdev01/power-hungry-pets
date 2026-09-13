@@ -6,7 +6,7 @@
  */
 import { createInitialGameState, gameReducer, GAME_EVENT_LOG_LIMIT } from '@/lib/game/game-reducer';
 import { createInitialRoomFlowState, roomFlowReducer } from '@/lib/room-flow/reducer';
-import { privateView, publicView, roomSnapshotInMatch } from './helpers/game-views';
+import { privateView, publicView, roomSnapshotInMatch, roundView } from './helpers/game-views';
 
 const aPublicView = publicView();
 const aPrivateView = privateView();
@@ -76,6 +76,145 @@ describe('game reducer', () => {
     state = gameReducer(state, { type: 'game/match-ended', winners: ['p-other'] });
     state = gameReducer(state, { type: 'game/cleared' });
     expect(state).toEqual(createInitialGameState());
+  });
+});
+
+describe('round result capture (WU9)', () => {
+  it('captures a ROUND_ENDED batch as round-result evidence with the pre-batch round number', () => {
+    const seeded = gameReducer(createInitialGameState(), {
+      type: 'game/public-state',
+      publicView: publicView({ round: roundView({ roundNumber: 3 }) }),
+    });
+    const captured = gameReducer(seeded, {
+      type: 'game/events',
+      events: [
+        { type: 'TOKEN_AWARDED', playerId: 'p-self' },
+        { type: 'ROUND_ENDED', winnerIds: ['p-self'] },
+      ],
+    });
+    expect(captured.roundResult).not.toBeNull();
+    expect(captured.roundResult).toEqual({
+      roundNumber: 3,
+      winnerIds: ['p-self'],
+      awards: [{ playerId: 'p-self', amount: 1 }],
+      reason: 'last-survivor',
+      revealedHands: [],
+    });
+    // The feed stays animation-only; the evidence lives beside it.
+    expect(captured.recentEvents.at(-1)).toEqual({ type: 'ROUND_ENDED', winnerIds: ['p-self'] });
+  });
+
+  it('keeps the round number null when no public view precedes the batch', () => {
+    const captured = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    expect(captured.roundResult?.roundNumber).toBeNull();
+  });
+
+  it('marks exhaustion only when the batch carries HANDS_REVEALED', () => {
+    const revealed = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [
+        {
+          type: 'HANDS_REVEALED',
+          hands: [{ playerId: 'p-self', card: { value: 0, type: 'ROBOT_ASPIRADOR_REAL' } }],
+        },
+        { type: 'ROUND_ENDED', winnerIds: ['p-self'] },
+      ],
+    });
+    expect(revealed.roundResult?.reason).toBe('exhaustion');
+    expect(revealed.roundResult?.revealedHands).toEqual([
+      { playerId: 'p-self', card: { value: 0, type: 'ROBOT_ASPIRADOR_REAL' } },
+    ]);
+
+    const survived = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [
+        { type: 'PLAYER_ELIMINATED', playerId: 'p-other' },
+        { type: 'ROUND_ENDED', winnerIds: ['p-self'] },
+      ],
+    });
+    expect(survived.roundResult?.reason).toBe('last-survivor');
+    expect(survived.roundResult?.revealedHands).toEqual([]);
+  });
+
+  it('captures nothing from a batch that also announces the match end (WU10 owns it)', () => {
+    const captured = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [
+        { type: 'ROUND_ENDED', winnerIds: ['p-self'] },
+        { type: 'MATCH_ENDED', winnerIds: ['p-self'] },
+      ],
+    });
+    expect(captured.roundResult).toBeNull();
+  });
+
+  it('clears the visible result when the next gameplay event batch arrives', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/public-state',
+      publicView: publicView(),
+    });
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    expect(state.roundResult).not.toBeNull();
+
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-other' }],
+    });
+    expect(state.roundResult).toBeNull();
+  });
+
+  it('does not clear the result when only fresh projections arrive', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/public-state',
+      publicView: publicView(),
+    });
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    const withResult = state;
+
+    state = gameReducer(state, { type: 'game/public-state', publicView: publicView() });
+    expect(state.roundResult).toBe(withResult.roundResult);
+
+    state = gameReducer(state, {
+      type: 'game/private-state',
+      privateView: privateView(),
+    });
+    expect(state.roundResult).toBe(withResult.roundResult);
+  });
+
+  it('re-arms a later ROUND_ENDED batch with a fresh evidence object', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/public-state',
+      publicView: publicView(),
+    });
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    const first = state.roundResult;
+
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-other'] }],
+    });
+    expect(state.roundResult).not.toBe(first);
+    expect(state.roundResult?.winnerIds).toEqual(['p-other']);
+  });
+
+  it('resets the round result with the rest of the game state on clear', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    state = gameReducer(state, { type: 'game/cleared' });
+    expect(state.roundResult).toBeNull();
   });
 });
 

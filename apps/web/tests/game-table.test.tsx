@@ -13,6 +13,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
 import { createInitialRoomFlowState, type RoomFlowState } from '@/lib/room-flow/reducer';
+import type { GameState } from '@/lib/game/game-reducer';
 import type { RoomFlowController } from '@/lib/room-flow/controller';
 import type { CardType, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
 import {
@@ -53,6 +54,7 @@ function flowState(
     privateView?: PrivateGameView | null;
     matchEnded?: boolean;
     matchWinners?: string[];
+    roundResult?: GameState['roundResult'];
     busy?: RoomFlowState['busy'];
     error?: RoomFlowState['error'];
   } = {},
@@ -71,6 +73,7 @@ function flowState(
       matchEnded: overrides.matchEnded ?? false,
       matchWinners: overrides.matchWinners ?? [],
       recentEvents: [],
+      roundResult: overrides.roundResult ?? null,
     },
   };
 }

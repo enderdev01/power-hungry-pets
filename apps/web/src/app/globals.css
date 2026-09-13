@@ -317,6 +317,8 @@ body {
    assets, geometry, materials, and motion remain intentionally undecided. */
 
 .game-table {
+  /* WU9: anchors the centered round-result slip inside the table. */
+  position: relative;
   --game-surface: var(--board);
   --game-placeholder-surface: var(--paper);
   --game-placeholder-ink: var(--paper-ink);
@@ -700,6 +702,91 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* WU9 round result: the ended round is a centered pinned-paper slip inside
+   the table. It is information, not a mandatory decision: no scrim, no inert
+   table, no focus trap — the next round stays playable behind and around it.
+   Coral stays reserved for alarms, so the slip uses the paper voice. */
+
+.game-round-result {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 20;
+  width: min(30rem, calc(100% - 2rem));
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-color: var(--paper-faded) var(--paper);
+  background: var(--paper);
+  color: var(--paper-ink);
+  border: 1px solid var(--paper-ink);
+  padding: 1.5rem 1.75rem 1.6rem;
+  transform: translate(-50%, -50%) rotate(-0.7deg);
+}
+
+/* The enamel pin: the result slip is pinned to the table like every slip. */
+
+.game-round-result::before {
+  content: '';
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--board);
+  border: 2px solid var(--yellow);
+}
+
+.game-round-result-title {
+  margin: 0 0 0.75rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.game-round-result-winners,
+.game-round-result-reason {
+  margin: 0 0 0.35rem;
+}
+
+.game-round-result-winners {
+  font-weight: 700;
+}
+
+.game-round-result-awards,
+.game-round-result-reveals {
+  margin-top: 0.75rem;
+}
+
+.game-round-result-awards h3,
+.game-round-result-reveals h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.game-round-result-awards ul,
+.game-round-result-reveals ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.game-round-result-reveals-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+
+.game-round-result-continue {
+  min-height: 3rem;
+  margin-top: 1.1rem;
+}
+
 @media (max-width: 46rem) {
   .game-center,
   .game-player-list {
@@ -738,5 +825,12 @@ body {
   .slip:nth-of-type(even),
   .roster {
     transform: none;
+  }
+
+  /* The result slip keeps its centering translation but drops the pinned
+     rotation: `transform: none` here would also remove translate(-50%, -50%)
+     and throw the absolutely-positioned slip off-center. */
+  .game-round-result {
+    transform: translate(-50%, -50%);
   }
 }

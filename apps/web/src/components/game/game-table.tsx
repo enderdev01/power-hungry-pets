@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * M7 game table (WU6/WU7 slice). It renders authoritative projections and
+ * M7 game table (WU6-WU9 slice). It renders authoritative projections and
  * configurable visual placeholders, plus the server-gated turn controls:
  * Draw renders exactly when the viewer's own legalActions carry DRAW_CARD,
  * Play renders per exact targetless PLAY_CARD action, and target-bearing
@@ -16,6 +16,12 @@ import { PrivateDecisionModal } from '@/components/game/private-decision-modal';
 import type { CardAssetConfig } from '@/lib/game/asset-resolver';
 import { cardPresentation } from '@/lib/game/card-presentation';
 import { evaluatePendingDecision } from '@/lib/game/pending-decision';
+import {
+  evaluateRoundResult,
+  roundResultReasonSentence,
+  type RoundResultEvidence,
+  type RoundResultModel,
+} from '@/lib/game/round-result';
 import { evaluateTurnControls } from '@/lib/game/turn-controls';
 import type { RoomFlowController } from '@/lib/room-flow/room-flow';
 import type { RoomFlowState } from '@/lib/room-flow/reducer';
@@ -31,6 +37,40 @@ function handCountLabel(count: number): string {
 
 function tokenLabel(count: number): string {
   return count === 1 ? '1 victory token' : `${count} victory tokens`;
+}
+
+/** "Ana and Bruno" / "Ana, Bruno and Caro" for shared-win wording. */
+function joinNames(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(' and ');
+  }
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** WU9 slip title: honest about a round number the evidence never carried. */
+function roundResultTitle(roundNumber: number | null): string {
+  return roundNumber === null ? 'The round is over' : `Round ${roundNumber} is over`;
+}
+
+function roundResultWinnersSentence(model: RoundResultModel): string | null {
+  if (model.kind !== 'visible' || model.winners.length === 0) {
+    return null;
+  }
+  const names = model.winners.map((winner) => winner.name);
+  return model.sharedWin ? `${joinNames(names)} share the round.` : `${names[0]} wins the round.`;
+}
+
+function roundResultAwardSentence(award: {
+  name: string;
+  amount: number;
+  total: number | null;
+}): string {
+  // Award-only copy when the total is withheld: it can only claim what the
+  // evidence announced, never a possibly stale pre-award balance.
+  const tokens = tokenLabel(award.amount);
+  return award.total === null
+    ? `${award.name} earned ${tokens}.`
+    : `${award.name} earned ${tokens} — now ${award.total}.`;
 }
 
 function turnPrompt(view: PublicGameView, viewerId: string | null): string {
@@ -153,6 +193,23 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // modal; any other kind opens it over an inert table.
   const decision = evaluatePendingDecision(privateView, viewerId);
   const decisionOpen = decision.kind !== 'none';
+  // WU9: the round result, derived only from the captured ROUND_ENDED
+  // batch evidence plus the current public view — never inferred from
+  // public state. It is information, not a mandatory decision: no modal,
+  // no inert table, no focus trap. An explicit Continue dismisses it
+  // locally and sends no game command; a newly captured batch arrives as
+  // a fresh evidence object and re-arms the slip.
+  const resultModel = evaluateRoundResult(game.roundResult, publicView);
+  const [dismissedResult, setDismissedResult] = useState<RoundResultEvidence | null>(null);
+  // A WU8 mandatory modal owns the interaction while it is open: the slip is
+  // hidden (not discarded) so its Continue is never visible-but-inert behind
+  // the modal. When the modal closes, the slip returns if the evidence remains.
+  const resultVisible =
+    !decisionOpen && game.roundResult !== null && game.roundResult !== dismissedResult;
+  const dismissResult = (): void => {
+    setDismissedResult(game.roundResult);
+  };
+  const winnersSentence = roundResultWinnersSentence(resultModel);
   // One local armed-card selection at a time. The selection self-heals against
   // new projections: an armed card that no longer carries published target
   // options (or became targetless-playable) is simply no longer armed.
@@ -418,6 +475,55 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
             </ul>
           )}
         </section>
+
+        {/* WU9: the centered pinned-paper result slip. It stays inside the
+            table (never a fixed overlay): the next round remains playable
+            behind and around it, and table controls keep working. Hidden —
+            not discarded — while a WU8 mandatory modal is open. */}
+        {resultVisible && resultModel.kind === 'visible' && (
+          <section className="game-round-result" role="status" aria-label="Round result">
+            <h2 className="game-round-result-title">{roundResultTitle(resultModel.roundNumber)}</h2>
+            {winnersSentence !== null && (
+              <p className="game-round-result-winners">{winnersSentence}</p>
+            )}
+            <p className="game-round-result-reason">
+              {roundResultReasonSentence(resultModel.reason)}
+            </p>
+            {resultModel.awards.length > 0 && (
+              <div className="game-round-result-awards">
+                <h3>Victory tokens</h3>
+                <ul>
+                  {resultModel.awards.map((award) => (
+                    <li key={award.playerId}>{roundResultAwardSentence(award)}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {resultModel.reveals.length > 0 && (
+              <div className="game-round-result-reveals">
+                <h3>Revealed hands</h3>
+                <ul className="game-round-result-reveals-list">
+                  {resultModel.reveals.map((reveal, index) => (
+                    <li key={`${reveal.playerId}-${index}`}>
+                      <CardPlaceholder
+                        card={reveal.card}
+                        assetConfig={assetConfig}
+                        label={`${reveal.name}'s revealed hand: ${cardPresentation(reveal.card).name}, value ${reveal.card.value}`}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <button
+              type="button"
+              className="action-button game-round-result-continue"
+              onClick={dismissResult}
+            >
+              Continue
+            </button>
+          </section>
+        )}
       </div>
 
       {decisionOpen && (
