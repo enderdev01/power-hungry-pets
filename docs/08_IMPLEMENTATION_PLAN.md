@@ -233,24 +233,26 @@ Do not prioritize polished artwork yet.
 
 ---
 
-## Milestone 8 — Visual polish
+## Milestone 8 — Visual polish (complete)
 
-Add:
+Delivered:
 
-- card movement;
-- flips;
-- shuffle;
-- swaps;
-- protection indicator;
-- forced play;
-- elimination;
-- victory token animation;
-- responsive mobile layout;
-- reduced-motion support.
+- projection-confirmed, public-safe motion cues for draw, play, flip, shuffle, swap, and private-decision resolution; cues are derived from sanitized event batches and consumed only after the matching projection arrives;
+- textual and visual feedback for protection, forced play, elimination, and victory-token changes without moving rule logic into React;
+- a responsive Digital Tabletop Arcade at the 320px floor and across mobile, tablet, and desktop: CSS-only 63:88 stamped card placeholders, distinct table plane, compact public seat avatars, a centered non-interactive action stage, and the viewer's hand as the primary playable band;
+- mandatory private-decision modals that keep the visible table inert, trap focus, restore focus, and remain mobile-safe;
+- `prefers-reduced-motion` behavior that removes spatial motion while preserving all state and textual feedback;
+- final real-browser evidence at `.impeccable/review/m8-table-{desktop,mobile,320,reduced-motion}.png`.
+
+The stable asset-key seam remains configurable. Final artwork, textures, branded frames, and background art remain deferred until usage rights are established. The untracked `docs/10_VISUAL_SYSTEM.md`, `docs/11_CARD_COMPONENT_SPEC.md`, and `docs/12_TABLE_SCENE_SPEC.md` drafts were not adopted as authority and remain untouched.
 
 ### Exit criteria
 
-Game feels polished without changing rules behavior.
+- [x] Visual polish changes no authoritative rule or privacy behavior.
+- [x] Projection/event sequencing prevents speculative or replayed action animation.
+- [x] Desktop, 390px mobile, and 320px floor captures show no horizontal clipping; the own hand and current action retain priority.
+- [x] Reduced-motion capture preserves complete game information without spatial animation.
+- [x] Final web suite: 30 suites / 563 tests green; root build, lint, and format checks clean (docs/07_TEST_PLAN.md §26).
 
 ---
 

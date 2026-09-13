@@ -433,3 +433,46 @@ The WU10 long socket acceptance (`apps/web/tests/socket-flow.integration.test.ts
 - green on two repeated focused runs (1 passed / 6 skipped per run).
 
 The full web suite in this pass: 23 suites / 377 tests — fully green. The earlier one-failure state (`round-result.test.tsx` "suppresses the slip entirely when the match has ended (WU10 owns that presentation)") was a test-contract defect, not a production defect: the fixture lacked the authoritative `MATCH_END` projection and the stale assertions queried `role="region"`; both are fixed, and the WU9/WU10 limitation entry in docs/08_IMPLEMENTATION_PLAN.md Milestone 7 has been closed.
+
+## 26. Milestone 8 visual-polish acceptance (implemented)
+
+### Authoritative motion and state feedback
+
+- motion plans are derived only from sanitized public event batches and wait for the matching public projection before presentation;
+- bounded reducers preserve cues across a saturated activity log, consume each sequence once, and never replay cues after reconnect;
+- draw, play, flip, shuffle, swap, and private-resolution cues carry no hidden card identity or private decision detail;
+- destructive status precedence keeps elimination and forced-play feedback from being overwritten by weaker cues;
+- protection and victory-token state remain readable as text without color or animation.
+
+### Responsive and accessible table
+
+- semantic reading order remains turn status, own hand, shared center, then public seats even where CSS grid areas rearrange the visual table;
+- the 320px floor stacks shared piles without horizontal overflow; 390px keeps two-up piles and contains its one-line action control;
+- desktop gives the shared center two of three columns, packs public seats into compact two-seat rows, and keeps the own hand materially visible in the first 1280×900 viewport;
+- card faces and backs retain the 63:88 ratio, centered CSS-only stamps, stable asset hooks, and legible effect text;
+- the center-action card is `aria-hidden`, non-interactive, out of flow, and absent after its bounded cue;
+- mandatory private-decision modals retain focus trapping, inert background behavior, no Escape/outside dismissal, focus restoration, and viewport-inset-safe mobile sizing;
+- reduced motion removes movement while leaving the authoritative destination state and all textual information visible.
+
+### Real-browser visual evidence
+
+Captured from a two-player Socket.IO match against the production web build:
+
+- `.impeccable/review/m8-table-desktop.png` — 1280×900;
+- `.impeccable/review/m8-table-mobile.png` — 390×844;
+- `.impeccable/review/m8-table-320.png` — 320×700;
+- `.impeccable/review/m8-table-reduced-motion.png` — 390×844 with reduced motion.
+
+The harness asserted the shipped `data-visual-system="m8-css-stamps"`, a real in-match projection, nonempty images, and no horizontal overflow. Visual confirmation found the desktop hand visible in the first viewport, the 390px draw action contained in its pile, and no 320px clipping.
+
+### Observed evidence (final)
+
+| Gate | Result |
+|---|---|
+| Responsive focused suite | 1 suite / 44 tests — green |
+| Full web suite | 30 suites / 563 tests — green |
+| Root build | clean |
+| Root lint | clean |
+| Root format check | clean |
+
+Final artwork remains outside this acceptance: rights are unresolved, so M8 intentionally validates the configurable CSS-only placeholder system (docs/09_OPEN_QUESTIONS.md).

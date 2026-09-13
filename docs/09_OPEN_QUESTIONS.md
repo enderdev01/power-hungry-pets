@@ -159,7 +159,11 @@ Deliberate deferrals recorded so later milestones pick them up intentionally (do
 
 Final artwork distribution rights are not established.
 
-Development should use placeholders or assets the project is authorized to use.
+Milestone 8 therefore ships configurable CSS-only stamped placeholders and no final artwork, textures, branded frames, or background art. `DESIGN.md` and the shipped implementation are authoritative for the current visual system; the untracked `docs/10_VISUAL_SYSTEM.md`, `docs/11_CARD_COMPONENT_SPEC.md`, and `docs/12_TABLE_SCENE_SPEC.md` drafts were not adopted and are superseded wherever they conflict.
+
+Development should continue using placeholders or assets the project is authorized to use.
+
+**Status:** OPEN for final authorized artwork; not a blocker for the completed Milestone 8 polish.
 
 ### Disconnect forfeit
 
