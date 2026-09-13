@@ -218,6 +218,71 @@ describe('round result capture (WU9)', () => {
   });
 });
 
+describe('motion cue seam (M8 WU1)', () => {
+  it('derives the motion cue state from an accepted events batch', () => {
+    const next = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
+    });
+    expect(next.motionCue).toEqual({
+      sequence: 1,
+      cues: [{ kind: 'card-drawn', playerId: 'p-self' }],
+    });
+  });
+
+  it('advances the motion sequence monotonically across batches', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
+    });
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'TOKEN_AWARDED', playerId: 'p-other' }],
+    });
+    expect(state.motionCue.sequence).toBe(2);
+  });
+
+  it('does not create false motion from an unsupported-only batch', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
+    });
+    const withCue = state.motionCue;
+
+    state = gameReducer(state, {
+      type: 'game/events',
+      events: [{ type: 'ROUND_ENDED', winnerIds: ['p-self'] }],
+    });
+    expect(state.motionCue).toBe(withCue);
+  });
+
+  it('projection-only actions never touch the motion cue state', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
+    });
+    const withCue = state.motionCue;
+
+    state = gameReducer(state, { type: 'game/public-state', publicView: aPublicView });
+    expect(state.motionCue).toBe(withCue);
+
+    state = gameReducer(state, { type: 'game/private-state', privateView: aPrivateView });
+    expect(state.motionCue).toBe(withCue);
+
+    state = gameReducer(state, { type: 'game/match-ended', winners: ['p-self'] });
+    expect(state.motionCue).toBe(withCue);
+  });
+
+  it('resets the motion cue state with the rest of the game state on clear', () => {
+    let state = gameReducer(createInitialGameState(), {
+      type: 'game/events',
+      events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
+    });
+    state = gameReducer(state, { type: 'game/cleared' });
+    expect(state.motionCue).toEqual({ sequence: 0, cues: [] });
+  });
+});
+
 describe('room-flow reducer hosts the game slice', () => {
   it('starts with an awaiting-projections game state', () => {
     const state = createInitialRoomFlowState();

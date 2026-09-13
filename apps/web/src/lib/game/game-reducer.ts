@@ -5,6 +5,7 @@
  * and records match end. It never computes rules and never invents state.
  */
 import type { GamePublicEvent, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
+import { createInitialMotionCueState, deriveMotionCues, type MotionCueState } from './motion-cues';
 import { nextRoundResult, type RoundResultEvidence } from './round-result';
 
 /** Maximum number of animation-only events retained for the feed. */
@@ -30,6 +31,12 @@ export interface GameState {
    * touch it.
    */
   roundResult: RoundResultEvidence | null;
+  /**
+   * M8 WU1: reducer-owned motion cues derived from each atomic event batch —
+   * a monotonic batch sequence plus bounded typed public cues. Projection
+   * actions never touch it; `game/cleared` resets it with the rest of state.
+   */
+  motionCue: MotionCueState;
 }
 
 export type GameAction =
@@ -48,6 +55,7 @@ export function createInitialGameState(): GameState {
     matchWinners: [],
     recentEvents: [],
     roundResult: null,
+    motionCue: createInitialMotionCueState(),
   };
 }
 
@@ -66,6 +74,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         // resumed and clears it. Projections alone never touch it, so the
         // server's immediate post-result fanout cannot erase the slip.
         roundResult: nextRoundResult(state.roundResult, action.events, state.publicView),
+        // M8 WU1: motion cues derive from the same atomic batch; batches
+        // without supported cues return the previous state unchanged.
+        motionCue: deriveMotionCues(state.motionCue, action.events),
       };
     case 'game/match-ended':
       return { ...state, matchEnded: true, matchWinners: [...action.winners] };
