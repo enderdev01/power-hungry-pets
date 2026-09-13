@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * M7 game table (WU6-WU9 slice). It renders authoritative projections and
+ * M8 game table (WU6-WU9 slice). It renders authoritative projections and
  * configurable visual placeholders, plus the server-gated turn controls:
  * Draw renders exactly when the viewer's own legalActions carry DRAW_CARD,
  * Play renders per exact targetless PLAY_CARD action, and target-bearing
@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { CardPlaceholder } from '@/components/game/card-placeholder';
 import { PrivateDecisionModal } from '@/components/game/private-decision-modal';
+import { PlayerAvatar } from '@/components/game/player-avatar';
 import type { CardAssetConfig } from '@/lib/game/asset-resolver';
 import { cardPresentation } from '@/lib/game/card-presentation';
 import { evaluateMatchResult, type MatchResultModel } from '@/lib/game/match-result';
@@ -186,8 +187,13 @@ function PlayerZone({
       data-motion-sequence={zoneMotion?.sequence}
     >
       <header className="game-player-header">
-        <strong>{player.name}</strong>
-        <span>{player.connected ? 'at the table' : 'away'}</span>
+        {/* M8 seat avatar: derived from the display name only — initials
+            plus a deterministic stamp variant — never a raw id. */}
+        <span className="game-player-identity">
+          <PlayerAvatar name={player.name} />
+          <strong className="game-player-name">{player.name}</strong>
+        </span>
+        <span className="game-player-presence">{player.connected ? 'at the table' : 'away'}</span>
       </header>
       {/* The committed token count is the projection's own value, printed
           on the rack — never an optimistic increment. */}
@@ -508,7 +514,7 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
       <div
         ref={tableRef}
         className="game-table"
-        data-visual-system="m7-placeholders"
+        data-visual-system="m8-css-stamps"
         tabIndex={-1}
         inert={decisionOpen ? true : undefined}
       >
@@ -538,66 +544,6 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
           </p>
           {pending !== null && <p className="game-pending">{pending}</p>}
         </header>
-
-        <section className="game-center" aria-label="Shared card area">
-          <div className="game-pile" data-token-role="draw-pile">
-            <h2>Draw pile</h2>
-            <CardPlaceholder faceDown label="Draw pile, face down" />
-            <p>{round?.drawPileCount ?? 0} cards</p>
-            {controls.drawAllowed && (
-              <button
-                type="button"
-                className="action-button"
-                disabled={busy !== null}
-                onClick={() => {
-                  void controller.drawCard();
-                }}
-              >
-                {busy === 'draw' ? 'Drawing…' : 'Draw a card'}
-              </button>
-            )}
-          </div>
-          <div className="game-pile" data-token-role="hidden-card">
-            <h2>Hidden card</h2>
-            {(round?.hiddenCardCount ?? 0) > 0 ? (
-              <CardPlaceholder faceDown label="Hidden card, face down" />
-            ) : (
-              <span className="game-empty-slot">No hidden card</span>
-            )}
-            <p>{round?.hiddenCardCount ?? 0} face down</p>
-          </div>
-        </section>
-
-        <section
-          className="game-players"
-          aria-label="Players at the table"
-          data-motion={shuffleMotion?.kind}
-          data-motion-sequence={shuffleMotion?.sequence}
-        >
-          <ul className="game-player-list">
-            {publicView.players.map((player) => {
-              const zoneMotion = zoneMotionForPlayer(activeMotion, player.id);
-              return (
-                <PlayerZone
-                  // The zone subtree never remounts for motion: it hosts
-                  // keyboard-focusable target controls. The one-shot cue
-                  // replays by remounting the non-interactive surfaces
-                  // inside (hand backs, discard pile) keyed by sequence.
-                  key={player.id}
-                  player={player}
-                  assetConfig={assetConfig}
-                  targetChoice={targetChoiceFor(player.id)}
-                  zoneMotion={zoneMotion}
-                  handMotion={handMotionForPlayer(activeMotion, player.id)}
-                  discardMotion={discardMotionForPlayer(activeMotion, player.id)}
-                  shuffleSequence={shuffleMotion?.sequence}
-                  statusMotion={protectionMotionForPlayer(activeStatus, player.id)}
-                  tokenMotion={tokenMotionForPlayer(activeStatus, player.id)}
-                />
-              );
-            })}
-          </ul>
-        </section>
 
         <section className="game-own-hand" aria-label="Your hand">
           <h2>Your hand</h2>
@@ -672,6 +618,66 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
               })}
             </ul>
           )}
+        </section>
+
+        <section className="game-center" aria-label="Shared card area">
+          <div className="game-pile" data-token-role="draw-pile">
+            <h2>Draw pile</h2>
+            <CardPlaceholder faceDown label="Draw pile, face down" />
+            <p>{round?.drawPileCount ?? 0} cards</p>
+            {controls.drawAllowed && (
+              <button
+                type="button"
+                className="action-button"
+                disabled={busy !== null}
+                onClick={() => {
+                  void controller.drawCard();
+                }}
+              >
+                {busy === 'draw' ? 'Drawing…' : 'Draw a card'}
+              </button>
+            )}
+          </div>
+          <div className="game-pile" data-token-role="hidden-card">
+            <h2>Hidden card</h2>
+            {(round?.hiddenCardCount ?? 0) > 0 ? (
+              <CardPlaceholder faceDown label="Hidden card, face down" />
+            ) : (
+              <span className="game-empty-slot">No hidden card</span>
+            )}
+            <p>{round?.hiddenCardCount ?? 0} face down</p>
+          </div>
+        </section>
+
+        <section
+          className="game-players"
+          aria-label="Players at the table"
+          data-motion={shuffleMotion?.kind}
+          data-motion-sequence={shuffleMotion?.sequence}
+        >
+          <ul className="game-player-list">
+            {publicView.players.map((player) => {
+              const zoneMotion = zoneMotionForPlayer(activeMotion, player.id);
+              return (
+                <PlayerZone
+                  // The zone subtree never remounts for motion: it hosts
+                  // keyboard-focusable target controls. The one-shot cue
+                  // replays by remounting the non-interactive surfaces
+                  // inside (hand backs, discard pile) keyed by sequence.
+                  key={player.id}
+                  player={player}
+                  assetConfig={assetConfig}
+                  targetChoice={targetChoiceFor(player.id)}
+                  zoneMotion={zoneMotion}
+                  handMotion={handMotionForPlayer(activeMotion, player.id)}
+                  discardMotion={discardMotionForPlayer(activeMotion, player.id)}
+                  shuffleSequence={shuffleMotion?.sequence}
+                  statusMotion={protectionMotionForPlayer(activeStatus, player.id)}
+                  tokenMotion={tokenMotionForPlayer(activeStatus, player.id)}
+                />
+              );
+            })}
+          </ul>
         </section>
 
         {/* WU9: the centered pinned-paper result slip. It stays inside the

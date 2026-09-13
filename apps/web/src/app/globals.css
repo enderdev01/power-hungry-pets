@@ -328,7 +328,9 @@ body {
   --game-layout-gap: 1rem;
   --game-card-min-inline: 7rem;
   --game-card-max-inline: 13rem;
-  --game-card-min-block: 6.5rem;
+  /* Card-lift shadow color, derived from --board #17332d: a semantic
+     variable for the one M8 elevation, never a new palette role. */
+  --game-card-lift-shadow-color: 23, 51, 45;
   --game-card-compact-inline: 4.5rem;
   --game-card-compact-max-inline: 7rem;
   --game-card-compact-block: 5rem;
@@ -336,6 +338,54 @@ body {
   gap: var(--game-layout-gap);
   color: var(--paper);
   background: var(--game-surface);
+  /* M8 responsive recomposition: the semantic DOM reading order (turn state,
+     own hand, center piles, public player zones) is fixed; the viewport bands
+     rearrange only the visual topology through named grid areas. The default
+     template declares no error row: in the common no-error table there is
+     nothing to reserve, so no empty first-row gap can render. When the alarm
+     slip exists, the :has() template below prepends its top row in every band.
+     Mobile: own hand dominant, center piles compact two-up, safe-area padding. */
+  grid-template-areas:
+    'game-table-heading'
+    'game-own-hand'
+    'game-center'
+    'game-players';
+  padding: max(1rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+}
+
+.game-table-heading {
+  grid-area: game-table-heading;
+}
+
+.game-own-hand {
+  grid-area: game-own-hand;
+}
+
+.game-center {
+  grid-area: game-center;
+}
+
+.game-players {
+  grid-area: game-players;
+}
+
+/* WU6 correction: the alarm slip owns the top grid row in every band — it is
+   never auto-placed below the table where it could be missed. The row is
+   conditional: :has(> .game-error) swaps in an error-first template per band
+   only when the slip is actually rendered, so the no-error table keeps its
+   compact default topology. */
+.game-error {
+  grid-area: game-error;
+}
+
+.game-table:has(> .game-error) {
+  grid-template-areas:
+    'game-error'
+    'game-table-heading'
+    'game-own-hand'
+    'game-center'
+    'game-players';
 }
 
 .game-table-heading,
@@ -412,8 +462,61 @@ body {
   align-items: baseline;
 }
 
-.game-player-header span,
+/* M8 seat identity: the avatar stamp rides beside the printed name — a compact
+   seat marker, never a full slip. The variant attribute selects one of four
+   deterministic ink/paper treatments resolved below. */
+.game-player-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+.game-seat-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  flex-shrink: 0;
+  border: 2px solid var(--game-placeholder-ink);
+  border-radius: 2px;
+  background: var(--game-placeholder-surface);
+  color: var(--game-placeholder-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.game-seat-avatar[data-avatar-variant='1'] {
+  border-style: dashed;
+}
+
+.game-seat-avatar[data-avatar-variant='2'] {
+  background: var(--game-placeholder-ink);
+  color: var(--game-placeholder-surface);
+}
+
+.game-seat-avatar[data-avatar-variant='3'] {
+  border-color: var(--paper-faded);
+  color: var(--paper-faded);
+}
+
 .game-player-zone p {
+  font-size: 0.85rem;
+}
+
+/* M8 correction: the seat header resolves through explicit identity classes —
+   a broad `.game-player-header span` descendant rule would also restyle the
+   avatar's initials and defeat the avatar's own font-size. */
+.game-player-name {
+  font-size: 1rem;
+  /* Long display names wrap inside the seat header instead of overflowing
+     the 320px floor; the identity wrapper is allowed to shrink. */
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.game-player-presence {
   font-size: 0.85rem;
 }
 
@@ -467,12 +570,17 @@ body {
 .game-card-placeholder {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 0.25rem 0.5rem;
   align-content: start;
+  /* M8: the recorded 63:88 playable card ratio, square corners. Width is
+     fluid (min/max tokens) and height follows from the ratio. */
+  aspect-ratio: 63 / 88;
+  width: 100%;
   min-width: var(--game-card-min-inline);
   max-width: var(--game-card-max-inline);
-  min-height: var(--game-card-min-block);
   padding: 0.55rem;
+  border-radius: 2px;
   color: var(--game-placeholder-ink);
   background: var(--game-placeholder-surface);
   border: var(--game-outline);
@@ -480,11 +588,41 @@ body {
 
 .game-card-placeholder-back {
   place-items: center;
+  position: relative;
+  aspect-ratio: 63 / 88;
+  width: 100%;
   min-width: var(--game-card-compact-inline);
-  min-height: var(--game-card-compact-block);
+  max-width: var(--game-card-compact-max-inline);
+  padding: 0.55rem;
+  border-radius: 2px;
   border-style: dashed;
   font-size: 0.75rem;
   text-align: center;
+}
+
+/* M8 stamped back: an inner ink frame and the honest face-down word — pure
+   CSS, palette colors only, no texture or gradient. */
+.game-card-back-stamp {
+  display: grid;
+  place-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  height: 100%;
+}
+
+.game-card-back-frame {
+  position: absolute;
+  inset: 0.3rem;
+  border: 1px solid var(--game-placeholder-ink);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.game-card-back-word {
+  z-index: 1;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .game-card-art {
@@ -492,11 +630,28 @@ body {
   display: grid;
   place-items: center;
   min-height: 2.5rem;
+  align-self: stretch;
   padding: 0.35rem;
   border: 1px dashed var(--paper-faded);
+  border-radius: 2px;
   color: var(--paper-faded);
   font-size: 0.7rem;
   text-align: center;
+}
+
+/* M8 stamped art placeholder: a centered ink mark inside the dashed well —
+   pure CSS stamping from the public metadata seam, no image, no gradient. */
+.game-card-art-stamp {
+  display: grid;
+  place-items: center;
+  gap: 0.3rem;
+}
+
+.game-card-art-mark {
+  width: 1.4rem;
+  height: 1.4rem;
+  border: 2px solid var(--paper-faded);
+  border-radius: 50%;
 }
 
 .game-card-art img {
@@ -582,6 +737,24 @@ body {
   outline-offset: 2px;
 }
 
+/* M8 soft physical lift: the one elevation DESIGN.md permits at this
+   milestone, and only on the interactive own-hand card shells — never on
+   panels, slips, or modals. Reduced motion removes it entirely. */
+@keyframes motion-card-lift {
+  from {
+    transform: translateY(-0.75rem);
+    box-shadow: 0 0.4rem 0.9rem rgba(var(--game-card-lift-shadow-color), 0.45);
+  }
+  to {
+    transform: translateY(-0.5rem);
+    box-shadow: 0 0.3rem 0.7rem rgba(var(--game-card-lift-shadow-color), 0.4);
+  }
+}
+
+.game-hand-entry[data-armed='true'] .game-card-placeholder {
+  animation: motion-card-lift 240ms ease-out forwards;
+}
+
 .game-armed-prompt {
   margin: 0;
   font-weight: 700;
@@ -611,7 +784,8 @@ body {
   z-index: 40;
   display: grid;
   place-items: center;
-  padding: 1.25rem;
+  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
+    max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
   background: rgba(23, 51, 45, 0.92); /* board green, nearly opaque */
   overflow-y: auto;
 }
@@ -803,8 +977,15 @@ body {
    round slip; no action, because the server has no rematch contract. */
 
 .game-match-result {
-  width: min(30rem, calc(100% - 2rem));
-  margin: 3rem auto 0;
+  /* The match result replaces the table, so it respects the viewport insets
+     itself: the width shrinks by the horizontal insets and the top margin is
+     at least the safe-area inset (env() is 0 without viewport-fit=cover, so
+     the unchanged desktop layout is preserved). */
+  width: min(
+    30rem,
+    calc(100% - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))
+  );
+  margin: max(3rem, env(safe-area-inset-top)) auto 0;
   background: var(--paper);
   color: var(--paper-ink);
   border: 1px solid var(--paper-ink);
@@ -1105,13 +1286,103 @@ body {
 }
 
 @media (max-width: 46rem) {
-  .game-center,
+  /* M8 mobile band (320px floor included): the own hand is the dominant
+     surface; the center piles run compact two-up when the content fits and
+     stack to one column at the 320px floor; opponent zones stay compact but
+     keep every status, discard, and target available. The center piles keep
+     the base two-up composition; only the 320px floor below overrides it. */
+  .game-table {
+    gap: 0.75rem;
+  }
+
   .game-player-list {
     grid-template-columns: minmax(0, 1fr);
   }
 
   .game-card-placeholder {
     max-width: 100%;
+  }
+
+  /* The 10.5rem cap (not the base 13rem) keeps the own hand dominant here. A
+     min-width floor would be inert: each card resolves to
+     min(full panel width, 10.5rem), which never drops below 8.5rem in this
+     band, so only the cap is declared. */
+  .game-own-hand .game-card-placeholder {
+    max-width: 10.5rem;
+  }
+}
+
+/* The 320px floor: two-up no longer fits safely, so the compact piles stack
+   and every shell goes fluid. No horizontal overflow at the narrowest phone. */
+@media (max-width: 22.5rem) {
+  .game-center {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-card-placeholder,
+  .game-card-placeholder-back {
+    min-width: 0;
+    width: 100%;
+    max-width: 12rem;
+  }
+}
+
+/* M8 tablet/landscape band (46rem and up): a content-driven breakpoint
+   approved to finish M8 (DESIGN.md layout note deferred to closure). The
+   table topology appears — center action and player zones around/above —
+   while the own hand stays a full-width bottom band. Reading order is
+   untouched. The layer is min-width-only: the later min-width: 64rem desktop
+   layer overrides it by source cascade, so 46rem and every viewport above it
+   are continuously covered — no exclusive 63.99rem-style upper bound can
+   leave a fractional-viewport gap. */
+@media (min-width: 46rem) {
+  .game-table {
+    grid-template-areas:
+      'game-table-heading game-table-heading'
+      'game-center game-center'
+      'game-players game-players'
+      'game-own-hand game-own-hand';
+    align-content: start;
+  }
+
+  .game-table:has(> .game-error) {
+    grid-template-areas:
+      'game-error game-error'
+      'game-table-heading game-table-heading'
+      'game-center game-center'
+      'game-players game-players'
+      'game-own-hand game-own-hand';
+  }
+}
+
+/* M8 desktop band (64rem and up): the table is the protagonist. Declared
+   after the min-width-only tablet layer with equal specificity, every shared
+   declaration here overrides the tablet layer by source cascade. The center
+   action owns the visual center; player zones arrange around it; the own hand
+   sits as the bottom band. No dashboard grids: the center spans the full width
+   and the player zones arc under it. */
+@media (min-width: 64rem) {
+  .game-table {
+    grid-template-areas:
+      'game-table-heading game-table-heading game-table-heading'
+      'game-center game-center game-center'
+      'game-players game-players game-players'
+      'game-own-hand game-own-hand game-own-hand';
+    align-content: start;
+  }
+
+  .game-table:has(> .game-error) {
+    grid-template-areas:
+      'game-error game-error game-error'
+      'game-table-heading game-table-heading game-table-heading'
+      'game-center game-center game-center'
+      'game-players game-players game-players'
+      'game-own-hand game-own-hand game-own-hand';
+  }
+
+  .game-center {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 1.25rem;
   }
 }
 
@@ -1154,7 +1425,10 @@ body {
   /* M8: every motion cue hook collapses to its final state. The resting state
      already equals the animated end state, so only the movement is removed —
      final states and textual labels are fully preserved. The keyed status and
-     token pulse layers collapse exactly like every other hook. */
+     token pulse layers collapse exactly like every other hook. The armed
+     card-lift animation collapses with the same universal `animation: none`;
+     the armed selection ring and outline (layout-safe, non-spatial) still
+     mark the selection. */
   [data-motion],
   [data-motion] .game-card-placeholder {
     animation: none !important;

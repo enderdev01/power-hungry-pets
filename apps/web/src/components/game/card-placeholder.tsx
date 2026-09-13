@@ -33,8 +33,12 @@ interface FaceDownCardPlaceholderProps {
 type CardPlaceholderProps = FaceUpCardPlaceholderProps | FaceDownCardPlaceholderProps;
 
 /**
- * Visual-only card shell for M7. Geometry and imagery are intentionally
- * provisional; stable art keys and semantic CSS hooks let M8 replace both.
+ * Visual-only card shell (M8): CSS-only stamped art from the existing public
+ * metadata — value badge, stamped name, optional effect — at the recorded
+ * 63:88 ratio with square corners. The stable art-key seam and `img` asset
+ * slot stay untouched: when a future asset config maps an image, it renders
+ * inside the art well exactly as before; without one, the well shows the
+ * CSS-only stamped placeholder. No gradients, textures, or new palette.
  */
 export function CardPlaceholder(props: CardPlaceholderProps) {
   if (props.faceDown) {
@@ -45,7 +49,11 @@ export function CardPlaceholder(props: CardPlaceholderProps) {
         role="img"
         aria-label={props.label}
       >
-        <span aria-hidden="true">Face down</span>
+        {/* Stamped back: an ink frame and card mark, pure CSS, honest copy. */}
+        <span className="game-card-back-stamp" aria-hidden="true">
+          <span className="game-card-back-frame" aria-hidden="true" />
+          <span className="game-card-back-word">Face down</span>
+        </span>
       </span>
     );
   }
@@ -69,7 +77,10 @@ export function CardPlaceholder(props: CardPlaceholderProps) {
           // eslint-disable-next-line @next/next/no-img-element
           <img src={art.src} alt="" />
         ) : (
-          <span>Artwork placeholder</span>
+          <span className="game-card-art-stamp" aria-hidden="true">
+            <span className="game-card-art-mark" aria-hidden="true" />
+            Artwork placeholder
+          </span>
         )}
       </div>
       <span className="game-card-value">{props.card.value}</span>
