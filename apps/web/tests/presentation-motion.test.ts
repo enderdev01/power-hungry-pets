@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   advanceMotionConsumer,
+  centerStageMotion,
   discardMotionForPlayer,
   discardOriginLabel,
   evaluateBatchMotion,
@@ -143,7 +144,12 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
     );
     expect(outcome).toEqual({
       verdict: 'animate',
-      plan: { kind: 'card-landing', sequence: 1, playerId: SELF_ID },
+      plan: {
+        kind: 'card-landing',
+        sequence: 1,
+        playerId: SELF_ID,
+        card: { value: 10, type: 'REY_GATO' },
+      },
     });
   });
 
@@ -188,7 +194,12 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
       ),
     ).toEqual({
       verdict: 'animate',
-      plan: { kind: 'card-flip', sequence: 1, playerId: SELF_ID },
+      plan: {
+        kind: 'card-flip',
+        sequence: 1,
+        playerId: SELF_ID,
+        card: { value: 5, type: 'SERPIENTE_ENCANTADORA' },
+      },
     });
 
     // A PLAYED-origin newest discard is not the forced shell: wait, never guess.
@@ -220,7 +231,14 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
       evaluateBatchMotion(batchOf([{ type: 'PLAYER_ELIMINATED', playerId: OTHER_ID }]), confirming),
     ).toEqual({
       verdict: 'animate',
-      plan: { kind: 'card-flip', sequence: 1, playerId: OTHER_ID },
+      plan: {
+        kind: 'card-flip',
+        sequence: 1,
+        playerId: OTHER_ID,
+        // The projection's confirmed elimination-reveal shell is the public
+        // card the flip carries to the center stage.
+        card: { value: 3, type: 'CONEJITO_GUERRILLERO' },
+      },
     });
 
     const withoutReveal = view([seat(OTHER_ID, 'Bruno', { eliminated: true })]);
@@ -297,7 +315,12 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
     );
     expect(outcome).toEqual({
       verdict: 'animate',
-      plan: { kind: 'card-landing', sequence: 1, playerId: OTHER_ID },
+      plan: {
+        kind: 'card-landing',
+        sequence: 1,
+        playerId: OTHER_ID,
+        card: { value: 10, type: 'REY_GATO' },
+      },
     });
   });
 
@@ -314,7 +337,12 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
       ),
     ).toEqual({
       verdict: 'animate',
-      plan: { kind: 'card-landing', sequence: 1, playerId: SELF_ID },
+      plan: {
+        kind: 'card-landing',
+        sequence: 1,
+        playerId: SELF_ID,
+        card: { value: 10, type: 'REY_GATO' },
+      },
     });
   });
 
@@ -685,6 +713,7 @@ describe('motion consumer (advanceMotionConsumer)', () => {
       kind: 'card-landing',
       sequence: 1,
       playerId: SELF_ID,
+      card: { value: 10, type: 'REY_GATO' },
     });
     expect(confirmed.state.pending).toBeNull();
   });
@@ -979,6 +1008,7 @@ describe('motion consumer (advanceMotionConsumer)', () => {
       kind: 'card-landing',
       sequence: MOTION_CUE_LOG_LIMIT + 1,
       playerId: SELF_ID,
+      card: { value: 10, type: 'REY_GATO' },
     });
     expect(confirmed.state.pending).toBeNull();
 
@@ -1086,6 +1116,119 @@ describe('origin labels', () => {
   });
 });
 
+describe('center-action stage seam (centerStageMotion)', () => {
+  it('exposes the confirmed public card for a card-landing plan', () => {
+    const plan = evaluateBatchMotion(
+      batchOf([{ type: 'CARD_PLAYED', playerId: SELF_ID, card: card(10, 'REY_GATO') }]),
+      view([seat(SELF_ID, 'Ana', { discards: [discard(10, 'REY_GATO', 'PLAYED')] })]),
+    );
+    const active = plan.verdict === 'animate' ? plan.plan : null;
+    expect(centerStageMotion(active)).toEqual({
+      kind: 'card-landing',
+      sequence: 1,
+      card: { value: 10, type: 'REY_GATO' },
+    });
+  });
+
+  it('exposes the confirmed public card for a forced-face-up flip plan', () => {
+    const plan = evaluateBatchMotion(
+      batchOf([
+        {
+          type: 'CARD_FORCED_FACE_UP',
+          playerId: SELF_ID,
+          card: card(5, 'SERPIENTE_ENCANTADORA'),
+        },
+      ]),
+      view([
+        seat(SELF_ID, 'Ana', {
+          discards: [discard(5, 'SERPIENTE_ENCANTADORA', 'FORCED_PLAY')],
+        }),
+      ]),
+    );
+    const active = plan.verdict === 'animate' ? plan.plan : null;
+    expect(centerStageMotion(active)).toEqual({
+      kind: 'card-flip',
+      sequence: 1,
+      card: { value: 5, type: 'SERPIENTE_ENCANTADORA' },
+    });
+  });
+
+  it('carries the projection-confirmed elimination reveal, never an invented identity', () => {
+    const plan = evaluateBatchMotion(
+      batchOf([{ type: 'PLAYER_ELIMINATED', playerId: OTHER_ID }]),
+      view([
+        seat(OTHER_ID, 'Bruno', {
+          eliminated: true,
+          discards: [discard(3, 'CONEJITO_GUERRILLERO', 'ELIMINATION_REVEAL')],
+        }),
+      ]),
+    );
+    const active = plan.verdict === 'animate' ? plan.plan : null;
+    expect(centerStageMotion(active)).toEqual({
+      kind: 'card-flip',
+      sequence: 1,
+      card: { value: 3, type: 'CONEJITO_GUERRILLERO' },
+    });
+  });
+
+  it('is stageless for draws, effects, exchanges, shuffles, and a null plan', () => {
+    const draw = evaluateBatchMotion(
+      batchOf([{ type: 'CARD_DRAWN', playerId: SELF_ID }], { [SELF_ID]: 1 }),
+      view([seat(SELF_ID, 'Ana', { handCount: 2 })]),
+    );
+    expect(centerStageMotion(draw.verdict === 'animate' ? draw.plan : null)).toBeNull();
+    expect(centerStageMotion({ kind: 'effect-settle', sequence: 1, playerId: SELF_ID })).toBeNull();
+    expect(
+      centerStageMotion({ kind: 'hand-exchange', sequence: 1, playerIds: [SELF_ID, OTHER_ID] }),
+    ).toBeNull();
+    expect(centerStageMotion({ kind: 'hand-shuffle', sequence: 1 })).toBeNull();
+    expect(centerStageMotion(null)).toBeNull();
+  });
+
+  it('never carries instance identity or private data in the stage payload', () => {
+    const plan = evaluateBatchMotion(
+      batchOf([{ type: 'CARD_PLAYED', playerId: SELF_ID, card: card(10, 'REY_GATO') }]),
+      view([seat(SELF_ID, 'Ana', { discards: [discard(10, 'REY_GATO', 'PLAYED')] })]),
+    );
+    const active = plan.verdict === 'animate' ? plan.plan : null;
+    const payload = JSON.stringify(centerStageMotion(active));
+    expect(payload).not.toContain('instance');
+    expect(payload).not.toContain('inst-');
+    expect(payload).not.toContain(SELF_ID);
+    expect(payload).not.toContain(OTHER_ID);
+    // Public metadata only: exactly kind, sequence, and the {value,type} card.
+    expect(payload).toBe(
+      JSON.stringify({
+        kind: 'card-landing',
+        sequence: 1,
+        card: { value: 10, type: 'REY_GATO' },
+      }),
+    );
+  });
+
+  it('collapses stagelessly across a projection-only reconnect-style reset', () => {
+    const cueState = cueStateFrom([
+      { type: 'CARD_PLAYED', playerId: SELF_ID, card: card(10, 'REY_GATO') },
+    ]);
+    const active = advanceMotionConsumer(
+      initialMotionConsumerState(),
+      cueState,
+      view([seat(SELF_ID, 'Ana', { discards: [discard(10, 'REY_GATO', 'PLAYED')] })]),
+    );
+    expect(centerStageMotion(active.plan)).not.toBeNull();
+
+    // The game cleared and re-projected: the plan is gone, so no stage can
+    // replay across a reconnect.
+    const reset = advanceMotionConsumer(
+      active.state,
+      createInitialMotionCueState(),
+      view([seat(SELF_ID, 'Ana')]),
+    );
+    expect(reset.plan).toBeNull();
+    expect(centerStageMotion(reset.plan)).toBeNull();
+  });
+});
+
 describe('motion stylesheet contract (static source)', () => {
   const css = readFileSync(join(__dirname, '..', 'src', 'app', 'globals.css'), 'utf8');
 
@@ -1093,6 +1236,8 @@ describe('motion stylesheet contract (static source)', () => {
     'motion-draw-settle',
     'motion-card-landing',
     'motion-card-flip',
+    'motion-stage-landing',
+    'motion-stage-flip',
     'motion-hand-shuffle',
     'motion-hand-exchange',
     'motion-effect-settle',
@@ -1151,6 +1296,28 @@ describe('motion stylesheet contract (static source)', () => {
       expect(duration).toBeLessThanOrEqual(320);
     }
     expect(css).not.toContain('infinite');
+  });
+
+  it('returns the center stage to opacity 0 with stage-specific keyframes', () => {
+    // The stage overlay stays mounted between batches, so its own keyframes
+    // must end back at the base opacity 0 — the destination keyframes end
+    // visible and are never reused for the stage.
+    for (const name of ['motion-stage-landing', 'motion-stage-flip']) {
+      const body = extractBlock(css, `@keyframes ${name}`);
+      expect(body).not.toBe('');
+      const to = body.slice(body.indexOf('to'));
+      expect(to).toMatch(/opacity:\s*0/);
+      expect(to).toMatch(/transform:\s*none/);
+    }
+    // Every stage animation rule consumes only its stage keyframes.
+    const stageAnimations = [...css.matchAll(/\.game-center-stage[^{}]*\{([^{}]*)\}/g)]
+      .map((match) => match[1])
+      .filter((body) => body.includes('animation'));
+    expect(stageAnimations.length).toBe(2);
+    for (const body of stageAnimations) {
+      expect(body).toMatch(/motion-stage-(landing|flip)/);
+      expect(body).not.toMatch(/motion-card-(landing|flip)/);
+    }
   });
 
   it('collapses all motion hooks under prefers-reduced-motion while preserving final states', () => {

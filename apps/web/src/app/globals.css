@@ -319,7 +319,10 @@ body {
 .game-table {
   /* WU9: anchors the centered round-result slip inside the table. */
   position: relative;
-  --game-surface: var(--board);
+  /* M8 finish: the table plane is the darker ink-green token, so the playable
+     table reads as a distinct surface from the cork board page ground around
+     it — existing palette only, no gradient or texture. */
+  --game-surface: var(--paper-ink);
   --game-placeholder-surface: var(--paper);
   --game-placeholder-ink: var(--paper-ink);
   --game-status-accent: var(--yellow);
@@ -391,10 +394,11 @@ body {
 .game-table-heading,
 .game-table-message,
 .game-own-hand {
+  position: relative;
   background: var(--game-placeholder-surface);
   color: var(--game-placeholder-ink);
   border: var(--game-outline);
-  padding: 1rem;
+  padding: 1.5rem 1rem 1rem;
 }
 
 .game-table-heading h1,
@@ -418,6 +422,7 @@ body {
 }
 
 .game-center {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--game-layout-gap);
@@ -425,10 +430,30 @@ body {
 
 .game-pile,
 .game-player-zone {
+  position: relative;
   background: var(--game-placeholder-surface);
   color: var(--game-placeholder-ink);
   border: var(--game-outline);
-  padding: 0.85rem;
+  padding: 1.35rem 0.85rem 0.85rem;
+}
+
+/* Cartelera attachment: every gameplay paper surface is pinned to the board
+   like a slip — the existing 0.8rem enamel pin (board core, yellow rim),
+   CSS-only on the surface itself. Nested content stays plain paper: no inner
+   cards, no extra chrome. */
+.game-table-heading::before,
+.game-own-hand::before,
+.game-pile::before,
+.game-player-zone::before {
+  content: '';
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--board);
+  border: 2px solid var(--yellow);
 }
 
 .game-pile {
@@ -436,6 +461,23 @@ body {
   justify-items: start;
   align-content: start;
   gap: 0.6rem;
+  /* M8 finish: the shared pile card gets a definite track sized by the card
+     tokens, so it honors the 13rem desktop max instead of collapsing to the
+     compact 7rem back width; content stays start-aligned while the card
+     centers in its track. */
+  grid-template-columns: minmax(var(--game-card-min-inline), var(--game-card-max-inline));
+  justify-content: start;
+}
+
+.game-pile > * {
+  grid-column: 1;
+}
+
+.game-pile .game-card-placeholder {
+  justify-self: center;
+  width: 100%;
+  min-width: 0;
+  max-width: var(--game-card-max-inline);
 }
 
 .game-player-list,
@@ -487,8 +529,11 @@ body {
   letter-spacing: 0.08em;
 }
 
+/* Variants distinguish by tonal paper/ink treatments on a solid border:
+   dashed is reserved for provisional/empty surfaces, never a connected seated
+   player. Labels (the initials) are retained in every variant. */
 .game-seat-avatar[data-avatar-variant='1'] {
-  border-style: dashed;
+  background: var(--paper-raised);
 }
 
 .game-seat-avatar[data-avatar-variant='2'] {
@@ -587,6 +632,12 @@ body {
 }
 
 .game-card-placeholder-back {
+  /* Reset the inherited face-up grid template: the back is one optical unit —
+     a centered stamp inside an ink frame — so it places its single child
+     dead-center at every size. */
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: 100%;
   place-items: center;
   position: relative;
   aspect-ratio: 63 / 88;
@@ -1119,6 +1170,54 @@ body {
   animation: motion-card-flip 220ms ease-out;
 }
 
+/* The center-action stage mirrors the destination cue at the table's
+   center: an absolutely positioned, centered, pointer-events-none overlay
+   spanning the shared center. It never participates in the center grid —
+   the draw and hidden piles keep their two-up track — and its base opacity
+   is 0, so it is visually absent before its cue and after it. Its own
+   stage-specific keyframes end back at opacity 0; the destination keyframes
+   (which end visible) are never reused here. In reduced motion the
+   animation collapses and the stage stays hidden: the authoritative
+   destination already carries the final state and text. */
+.game-center-stage {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+@keyframes motion-stage-landing {
+  from {
+    opacity: 1;
+    transform: translateY(-0.6rem);
+  }
+  to {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+@keyframes motion-stage-flip {
+  from {
+    opacity: 1;
+    transform: rotateY(90deg);
+  }
+  to {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+.game-center-stage[data-motion='card-landing'] {
+  animation: motion-stage-landing 280ms ease-out;
+}
+
+.game-center-stage[data-motion='card-flip'] {
+  animation: motion-stage-flip 220ms ease-out;
+}
+
 .game-players[data-motion='hand-shuffle'] .game-card-placeholder-back {
   animation: motion-hand-shuffle 320ms ease-out;
 }
@@ -1310,6 +1409,17 @@ body {
   .game-own-hand .game-card-placeholder {
     max-width: 10.5rem;
   }
+
+  /* The pile controls keep their one-line labels at two-up widths while
+     holding the 3rem touch target; the 320px floor below releases the wrap
+     lock so the label may use the full available width. */
+  .game-pile .action-button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 0.5rem;
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
 }
 
 /* The 320px floor: two-up no longer fits safely, so the compact piles stack
@@ -1324,6 +1434,12 @@ body {
     min-width: 0;
     width: 100%;
     max-width: 12rem;
+  }
+
+  /* Single-column floor: the pile button may wrap to use the width it already
+     owns instead of forcing a nowrap overflow. */
+  .game-pile .action-button {
+    white-space: normal;
   }
 }
 
@@ -1362,12 +1478,18 @@ body {
    sits as the bottom band. No dashboard grids: the center spans the full width
    and the player zones arc under it. */
 @media (min-width: 64rem) {
+  /* A genuine table topology, not six equal rows: the shared center is the
+     dominant surface (two of three columns) with the public player arc seated
+     beside it, and the viewer's own hand stays one full-width bottom band —
+     the seat you play from. The semantic DOM order is untouched: grid areas
+     only rearrange the visuals. Rows are compact (auto / flexing center /
+     auto hand) so at 1280x900 the own hand enters the first viewport. */
   .game-table {
     grid-template-areas:
       'game-table-heading game-table-heading game-table-heading'
-      'game-center game-center game-center'
-      'game-players game-players game-players'
+      'game-center game-center game-players'
       'game-own-hand game-own-hand game-own-hand';
+    grid-template-rows: auto minmax(0, 1fr) auto;
     align-content: start;
   }
 
@@ -1375,14 +1497,44 @@ body {
     grid-template-areas:
       'game-error game-error game-error'
       'game-table-heading game-table-heading game-table-heading'
-      'game-center game-center game-center'
-      'game-players game-players game-players'
+      'game-center game-center game-players'
       'game-own-hand game-own-hand game-own-hand';
   }
 
   .game-center {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
     padding: 1.25rem;
+  }
+
+  /* The center stage card reads as the table's focal action. The public player
+     arc packs two compact seats per row so it cannot force the viewer's hand
+     below the first desktop viewport; 4+ seats continue on following rows. */
+  .game-players {
+    align-content: start;
+  }
+
+  .game-player-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .game-player-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .game-player-presence {
+    margin-left: auto;
+  }
+
+  .game-player-zone .game-card-placeholder-back {
+    width: var(--game-card-compact-inline);
+    min-width: 0;
+    max-width: var(--game-card-compact-inline);
+  }
+
+  .game-own-hand .game-card-placeholder {
+    max-width: 9rem;
   }
 }
 

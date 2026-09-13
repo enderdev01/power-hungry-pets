@@ -1462,7 +1462,9 @@ describe('game table motion cues (M8)', () => {
     const ownHand = screen.getByRole('region', { name: 'Your hand' });
     expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
     expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
-    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(1);
+    // One flip on the public discard destination, one on the center stage
+    // that mirrors the same public card where the physical table would.
+    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(2);
   });
 
   it('applies the flip to an elimination-reveal shell with its origin label', () => {
@@ -1786,6 +1788,180 @@ function reachingRules(
   return rules.filter((rule) => [...container.querySelectorAll(rule.selector)].some(matches))
     .length;
 }
+
+describe('game table center-action stage (M8 finish)', () => {
+  const LANDING_VIEW = viewWithDiscards([
+    { card: { value: 10, type: 'REY_GATO' }, origin: 'PLAYED' },
+  ]);
+  const LANDING_BATCH = motionCueFrom([
+    { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 10, type: 'REY_GATO' } },
+  ]);
+
+  it('renders a non-interactive center stage with the confirmed public card and the same cue', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
+      />,
+    );
+    const stage = container.querySelector('.game-center-stage');
+    expect(stage).not.toBeNull();
+    // The exact sequence cue of the authoritative batch.
+    expect(stage).toHaveAttribute('data-motion', 'card-landing');
+    expect(stage).toHaveAttribute('data-motion-sequence', '1');
+    // Non-interactive: no button, no focusable anything, hidden from a11y tree.
+    expect(stage?.querySelectorAll('button')).toHaveLength(0);
+    expect(stage).toHaveAttribute('aria-hidden', 'true');
+    // The public card itself, exactly as the cue and projection carry it.
+    const card = stage?.querySelector('.game-card-placeholder');
+    expect(card?.getAttribute('aria-label')).toBe('Rey Gato, value 10');
+    expect(within(stage as HTMLElement).getByText('10')).toBeInTheDocument();
+    expect(within(stage as HTMLElement).getByText(/Rey Gato/i)).toBeInTheDocument();
+    // No instance identity, no seat attribution anywhere on the stage.
+    expect(stage?.textContent).not.toContain('instance');
+    expect(stage?.textContent).not.toContain(OTHER_ID);
+    expect(stage?.textContent).not.toContain('Ana');
+  });
+
+  it('renders no stage before the projection confirms the destination', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards([]),
+          motionCue: motionCueFrom([
+            { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 10, type: 'REY_GATO' } },
+          ]),
+        })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+    expect(container.querySelector('.game-center-stage')).toBeNull();
+  });
+
+  it('never stages a draw, effect, exchange, or shuffle cue', () => {
+    // A confirmed draw: the addressed player's public handCount changed.
+    const drawView = viewWithDiscards([]).players.map((player) =>
+      player.id === SELF_ID ? { ...player, handCount: 2 } : player,
+    );
+    const drawState = flowState({
+      publicView: { ...viewWithDiscards([]), players: drawView },
+      motionCue: motionCueFrom([{ type: 'CARD_DRAWN', playerId: SELF_ID }]),
+    });
+    const { container } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={drawState} />,
+    );
+    expect(container.querySelector('.game-center-stage')).toBeNull();
+
+    const effectState = flowState({
+      motionCue: motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]),
+    });
+    const { container: effectContainer } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={effectState} />,
+    );
+    expect(effectContainer.querySelector('.game-center-stage')).toBeNull();
+
+    const shuffleState = flowState({
+      motionCue: motionCueFrom([{ type: 'HANDS_REDEALT', playerIds: [SELF_ID, OTHER_ID] }]),
+    });
+    const { container: shuffleContainer } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={shuffleState} />,
+    );
+    expect(shuffleContainer.querySelector('.game-center-stage')).toBeNull();
+  });
+
+  it('never replays the stage across a projection-only reconnect-style reset', () => {
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
+      />,
+    );
+    expect(container.querySelector('.game-center-stage')).not.toBeNull();
+
+    // The game cleared and re-projected: cues reset with it, stage included.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: LANDING_VIEW, motionCue: createInitialMotionCueState() })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+    expect(container.querySelector('.game-center-stage')).toBeNull();
+  });
+
+  it('reaches the rendered stage through a stylesheet rule that actually matches it', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
+      />,
+    );
+    const stage = container.querySelector('.game-center-stage');
+    expect(stage).not.toBeNull();
+    // A landing rule must reach the stage node itself (attribute presence
+    // alone never proves the animation starts).
+    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...source.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)].map((match) => ({
+      selector: match[1].trim(),
+      body: match[2],
+    }));
+    // The stage animates as its own overlay surface with its stage-specific
+    // landing keyframes (which end back at opacity 0), so the rule must reach
+    // the stage node itself.
+    const stageRules = rules.filter(
+      (rule) =>
+        rule.selector.includes('game-center-stage') &&
+        rule.body.includes('landing') &&
+        rule.body.includes('animation'),
+    );
+    expect(stageRules.length).toBeGreaterThan(0);
+    for (const rule of stageRules) {
+      expect([...container.querySelectorAll(rule.selector)]).toContain(stage);
+    }
+  });
+
+  it('overlays the shared center out-of-flow with base opacity 0', () => {
+    // Static layout contract: the center establishes the positioning
+    // context, and the stage is an absolute, centered, pointer-events-none
+    // overlay spanning it — never a grid participant that shifts the piles.
+    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...source.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)].map((match) => ({
+      selector: match[1].trim(),
+      body: match[2],
+    }));
+    const centerRules = rules.filter((rule) => rule.selector === '.game-center');
+    expect(centerRules.some((rule) => rule.body.includes('position: relative'))).toBe(true);
+    const stageRule = rules.find((rule) => rule.selector === '.game-center-stage');
+    expect(stageRule?.body).toMatch(/position:\s*absolute/);
+    expect(stageRule?.body).toMatch(/inset:\s*0/);
+    expect(stageRule?.body).toMatch(/pointer-events:\s*none/);
+    expect(stageRule?.body).toMatch(/opacity:\s*0/);
+  });
+
+  it('keeps the center pile structure stable while the stage overlay is mounted', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
+      />,
+    );
+    // Exactly the two piles remain the center's in-flow children, in the
+    // same order and with their own content, while the overlay is mounted.
+    const center = container.querySelector('.game-center');
+    const piles = center?.querySelectorAll(':scope > .game-pile');
+    expect(piles).toHaveLength(2);
+    expect(piles?.[0]).toHaveTextContent('Draw pile');
+    expect(piles?.[1]).toHaveTextContent('Hidden card');
+    expect(piles?.[1]?.querySelector('.game-card-placeholder-back')).not.toBeNull();
+    // The overlay itself carries no pile structure of its own.
+    const stage = container.querySelector('.game-center-stage');
+    expect(stage?.querySelectorAll('.game-pile')).toHaveLength(0);
+    // The piles' honest counts survive the overlay unchanged.
+    expect(screen.getByText(/^18 cards$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 face down$/i)).toBeInTheDocument();
+  });
+});
 
 describe('game table persistent player states (M8)', () => {
   it('renders the protection pin badge from the projection alone, with no cue', () => {

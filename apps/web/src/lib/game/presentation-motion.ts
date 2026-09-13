@@ -17,7 +17,7 @@
  * identity, guesses, or invented seat attribution — the displayed public card
  * always comes from the projection.
  */
-import type { PublicGameView } from '@power-hungry-pets/protocol';
+import type { PublicCard, PublicGameView } from '@power-hungry-pets/protocol';
 import type { MotionCue, MotionCueState } from './motion-cues';
 
 /** The one-shot CSS motion kinds this work unit ships. */
@@ -64,9 +64,22 @@ export interface StatusPlan {
 /** The active motion plan the table renders from; `null` means motionless. */
 export type ActiveMotion =
   | {
-      kind: Extract<MotionKind, 'draw-settle' | 'card-landing' | 'card-flip' | 'effect-settle'>;
+      kind: Extract<MotionKind, 'draw-settle' | 'effect-settle'>;
       sequence: number;
       playerId: string;
+    }
+  | {
+      kind: Extract<MotionKind, 'card-landing' | 'card-flip'>;
+      sequence: number;
+      playerId: string;
+      /**
+       * The public card the cue carried and the projection confirmed —
+       * retained for the center-action stage. PublicCard is {value,type}
+       * only: instance identity never enters this field, and the cue seam
+       * strips it before presentation. `null` keeps a cardless flip honest
+       * (no invented stage card).
+       */
+      card: PublicCard | null;
     }
   | { kind: 'hand-exchange'; sequence: number; playerIds: [string, string] }
   | { kind: 'hand-shuffle'; sequence: number };
@@ -235,7 +248,7 @@ function isPreCounts(value: unknown): value is Record<string, number> {
 function newestDiscard(
   publicView: PublicGameView | null,
   playerId: string,
-): { card: { value: number; type: string }; origin: string } | null {
+): { card: PublicCard; origin: string } | null {
   if (publicView === null || !Array.isArray(publicView.players)) {
     return null;
   }
@@ -256,7 +269,7 @@ function newestDiscard(
   ) {
     return null;
   }
-  return { card: newest.card, origin: newest.origin };
+  return { card: { value: newest.card.value, type: newest.card.type }, origin: newest.origin };
 }
 
 function sameCard(
@@ -324,7 +337,15 @@ export function evaluateBatchMotion(
       }
       return {
         verdict: 'animate',
-        plan: { kind: 'card-landing', sequence, playerId: focal.playerId },
+        plan: {
+          kind: 'card-landing',
+          sequence,
+          playerId: focal.playerId,
+          // The played card is the one public card both the cue and the
+          // confirming projection carry: it is retained (public {value,type}
+          // only) for the center-action stage.
+          card: { value: focal.card.value, type: focal.card.type },
+        },
       };
     }
     case 'card-forced-face-up': {
@@ -341,7 +362,12 @@ export function evaluateBatchMotion(
       }
       return {
         verdict: 'animate',
-        plan: { kind: 'card-flip', sequence, playerId: focal.playerId },
+        plan: {
+          kind: 'card-flip',
+          sequence,
+          playerId: focal.playerId,
+          card: { value: focal.card.value, type: focal.card.type },
+        },
       };
     }
     case 'player-eliminated': {
@@ -352,9 +378,16 @@ export function evaluateBatchMotion(
       if (newest === null || newest.origin !== 'ELIMINATION_REVEAL') {
         return { verdict: 'await-projection' };
       }
+      // The cue carries no card of its own; the projection's confirmed
+      // elimination-reveal shell is the public card the flip shows.
       return {
         verdict: 'animate',
-        plan: { kind: 'card-flip', sequence, playerId: focal.playerId },
+        plan: {
+          kind: 'card-flip',
+          sequence,
+          playerId: focal.playerId,
+          card: { value: newest.card.value, type: newest.card.type },
+        },
       };
     }
     case 'hands-redealt':
@@ -706,4 +739,36 @@ export function tableShuffleMotion(plan: ActiveMotion | null): ZoneMotion | null
   return plan !== null && plan.kind === 'hand-shuffle'
     ? { kind: 'hand-shuffle', sequence: plan.sequence }
     : null;
+}
+
+/** What the center-action stage may render: the confirmed public card only. */
+export interface CenterStageMotion {
+  kind: 'card-landing' | 'card-flip';
+  sequence: number;
+  card: PublicCard;
+}
+
+/**
+ * The center-action stage cue for one plan: a card-landing or card-flip plan
+ * that carries its projection-confirmed public {value,type} card renders a
+ * non-interactive placeholder at the table's center with the same one-shot
+ * sequence cue. Every other plan — draws, effects, exchanges, shuffles — and
+ * any cardless flip stays stageless, and a motionless reset (reconnect or
+ * cleared game) collapses the plan to `null`, so the stage can never replay
+ * across a projection-only reconnect. The payload is public metadata only:
+ * no instance identity, no private hand data, no seat attribution.
+ */
+export function centerStageMotion(plan: ActiveMotion | null): CenterStageMotion | null {
+  if (
+    plan === null ||
+    (plan.kind !== 'card-landing' && plan.kind !== 'card-flip') ||
+    plan.card === null
+  ) {
+    return null;
+  }
+  return {
+    kind: plan.kind,
+    sequence: plan.sequence,
+    card: { value: plan.card.value, type: plan.card.type },
+  };
 }

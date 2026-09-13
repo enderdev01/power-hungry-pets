@@ -28,6 +28,7 @@ import { evaluateTurnControls } from '@/lib/game/turn-controls';
 import { PlayerTokenRack, tokenLabel } from '@/components/game/player-token-rack';
 import {
   advanceMotionConsumer,
+  centerStageMotion,
   discardMotionForPlayer,
   discardOriginLabel,
   handMotionForPlayer,
@@ -508,6 +509,12 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // honest cue marks the shared players region, never a single seat).
   const shuffleMotion = tableShuffleMotion(activeMotion);
   const round = publicView.round;
+  // M8 center-action stage: when the authoritative plan is a card landing
+  // or flip that carries its projection-confirmed public {value,type} card,
+  // the table's center shows that card exactly where the physical game
+  // would. The stage is non-interactive and public-only; it disappears
+  // with the plan, so a reconnect can never replay it.
+  const centerStage = centerStageMotion(activeMotion);
 
   return (
     <>
@@ -638,6 +645,19 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
               </button>
             )}
           </div>
+          {/* The center-action stage: the current public card action, shown
+              where the physical game would show it. Purely presentational —
+              no controls, no seat attribution, no private identity. */}
+          {centerStage !== null && (
+            <div
+              className="game-center-stage"
+              aria-hidden="true"
+              data-motion={centerStage.kind}
+              data-motion-sequence={centerStage.sequence}
+            >
+              <CardPlaceholder card={centerStage.card} />
+            </div>
+          )}
           <div className="game-pile" data-token-role="hidden-card">
             <h2>Hidden card</h2>
             {(round?.hiddenCardCount ?? 0) > 0 ? (

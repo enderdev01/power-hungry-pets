@@ -1,3 +1,44 @@
+describe('center-action stage overlay (M8 pre-recapture correction)', () => {
+  it('spans the shared center as an absolute, centered, pointer-events-none overlay', () => {
+    // The center establishes the positioning context; the stage overlays it
+    // out-of-flow so it never joins the center grid nor shifts the piles.
+    const centerRules = cssRules().filter((rule) => rule.selector === '.game-center');
+    expect(centerRules.some((rule) => rule.body.includes('position: relative'))).toBe(true);
+    const stage = cssRules().find((rule) => rule.selector === '.game-center-stage');
+    expect(stage).toBeDefined();
+    expect(stage?.body).toMatch(/position:\s*absolute/);
+    expect(stage?.body).toMatch(/inset:\s*0/);
+    expect(stage?.body).toMatch(/pointer-events:\s*none/);
+    expect(stage?.body).toMatch(/opacity:\s*0/);
+  });
+
+  it('stays visually absent after its cue: stage keyframes return to opacity 0', () => {
+    const stageAnim = cssRules().filter(
+      (rule) => rule.selector.includes('.game-center-stage') && rule.body.includes('animation'),
+    );
+    expect(stageAnim.length).toBe(2);
+    for (const rule of stageAnim) {
+      expect(rule.body).toMatch(/motion-stage-(landing|flip)/);
+      expect(rule.body).not.toMatch(/motion-card-(landing|flip)/);
+    }
+    for (const name of ['motion-stage-landing', 'motion-stage-flip']) {
+      const from = css.indexOf(`@keyframes ${name}`);
+      expect(from).toBeGreaterThanOrEqual(0);
+      const block = css.slice(from);
+      const to = block.slice(block.indexOf('to {'));
+      expect(to).toMatch(/opacity:\s*0/);
+    }
+  });
+
+  it('keeps the stage hidden under reduced motion without new display removal', () => {
+    // The generic [data-motion] collapse already kills the stage animation;
+    // nothing in the reduced block may re-show it (its base opacity 0 stands).
+    const reduced = css.slice(css.lastIndexOf('@media (prefers-reduced-motion: reduce)'));
+    expect(reduced).not.toMatch(/opacity:\s*1/);
+    expect(reduced).not.toContain('display: none');
+  });
+});
+
 /**
  * M8 responsive/table visual-polish static contracts. The running jsdom
  * renderer cannot prove real pixel layout, so these are honest static tests
@@ -262,24 +303,50 @@ describe('content-driven tablet layer (46rem and up)', () => {
 });
 
 describe('desktop table-protagonist band (64rem and up)', () => {
-  it('composes the table as named grid areas with the center action dominant', () => {
+  it('composes a genuine table topology: dominant shared center, seated player arc beside it, own hand as the bottom band', () => {
     const desktop = css.slice(css.indexOf('@media (min-width: 64rem)'));
     expect(desktop).toContain('game-center');
     expect(desktop).toMatch(/grid-template-areas:[^;]*game-center/);
-    // The center action owns the table's middle; the player zones arc beside
-    // it; the own hand keeps one full-width bottom band. The center is at
-    // least twice the seat arc's width: the table is the protagonist, and no
-    // administrative grid rivals it.
     const areas = desktop.match(/grid-template-areas:([^;]+);/)?.[1] ?? '';
-    const rows = areas.split('"').filter((row) => row.trim().length > 0);
+    const rows = areas.split("'").filter((row) => row.trim().length > 0);
     const widthOf = (area: string): number =>
       Math.max(...rows.map((row) => (row.match(new RegExp(area, 'g')) ?? []).length), 0);
-    // The center row spans the full table width.
-    expect(widthOf('game-center')).toBeGreaterThanOrEqual(3);
-    // And it is never narrower than the heading, the player arc, or the hand.
-    expect(widthOf('game-center')).toBeGreaterThanOrEqual(widthOf('game-table-heading'));
+    // A real table, not six equal rows: exactly three composition rows.
+    expect(rows.length).toBe(3);
+    // The shared center is the dominant surface: two of three columns in its
+    // row, with the public player arc seated in the remaining column.
+    expect(widthOf('game-center')).toBe(2);
+    expect(widthOf('game-players')).toBe(1);
+    const centerRow = rows.find((row) => row.includes('game-center')) ?? '';
+    expect(centerRow).toContain('game-players');
+    // The own hand is one full-width bottom band (the seat you play from),
+    // never narrower than anything else.
+    expect(widthOf('game-own-hand')).toBe(3);
+    const handRow = rows.findIndex((row) => row.includes('game-own-hand'));
+    expect(handRow).toBe(rows.length - 1);
+    // The heading and the hand are slim full-width bands; the center row owns
+    // the flexible space between them — the table, not a rival administrative
+    // grid, gets the viewport's attention.
     expect(widthOf('game-center')).toBeGreaterThanOrEqual(widthOf('game-players'));
-    expect(widthOf('game-center')).toBeGreaterThanOrEqual(widthOf('game-own-hand'));
+  });
+
+  it('keeps the desktop center row flexing between fixed heading and hand bands', () => {
+    // The middle (table) row is the only flexible one: at 1280x900 the heading
+    // and the hand take their natural height first, so the hand enters the
+    // first viewport.
+    const desktop = css.slice(css.indexOf('@media (min-width: 64rem)'));
+    expect(desktop).toMatch(/grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/);
+  });
+
+  it('packs the desktop player arc into compact two-seat rows', () => {
+    const desktop = css.slice(css.indexOf('@media (min-width: 64rem)'));
+    expect(desktop).toMatch(
+      /\.game-player-list\s*{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    );
+    expect(desktop).toMatch(
+      /\.game-player-zone \.game-card-placeholder-back\s*{[^}]*width:\s*var\(--game-card-compact-inline\)[^}]*max-width:\s*var\(--game-card-compact-inline\)/,
+    );
+    expect(desktop).toMatch(/\.game-player-header\s*{[^}]*flex-wrap:\s*wrap/);
   });
 });
 
@@ -557,6 +624,103 @@ describe('card-lift shadow is a derived semantic token (M8 correction)', () => {
     const lift = css.match(/@keyframes\s+motion-card-lift\s*{[\s\S]*?\n}/)?.[0] ?? '';
     expect(lift).toContain('rgba(var(--game-card-lift-shadow-color)');
     expect(lift).not.toMatch(/rgba\(\d/);
+  });
+});
+
+describe('visual finish batch (M8 table finish)', () => {
+  it('gives the shared pile a definite card track that honors the 13rem desktop max', () => {
+    const pileRule = cssRules().find((rule) => rule.selector === '.game-pile');
+    expect(pileRule?.body).toMatch(
+      /grid-template-columns:\s*minmax\(var\(--game-card-min-inline\),\s*var\(--game-card-max-inline\)\)/,
+    );
+    const cardRule = cssRules().find(
+      (rule) => rule.selector === '.game-pile .game-card-placeholder',
+    );
+    // The pile card resolves to the full 13rem max, never the compact 7rem.
+    expect(cardRule?.body).toMatch(/max-width:\s*var\(--game-card-max-inline\)/);
+    expect(cardRule?.body).toMatch(/justify-self:\s*center/);
+    expect(cardRule?.body).not.toMatch(new RegExp('max-width:\\s*var\\(--game-card-compact'));
+  });
+
+  it('resets the inherited grid template on the face-down back so the stamp is one centered unit', () => {
+    const backRule = cssRules().find((rule) => rule.selector === '.game-card-placeholder-back');
+    expect(backRule?.body).toMatch(/grid-template-columns:\s*100%/);
+    expect(backRule?.body).toMatch(/grid-template-rows:\s*100%/);
+    expect(backRule?.body).toMatch(/place-items:\s*center/);
+    // The face-up card template (two columns, three rows) must not leak through.
+    expect(backRule?.body).not.toMatch(/grid-template-columns:\s*auto\s+minmax/);
+  });
+
+  it('keeps pile control labels contained and unwrapped at mobile two-up, then fluid at the 320px floor', () => {
+    const mobile = css.indexOf('@media (max-width: 46rem)');
+    const narrow = css.slice(mobile, css.indexOf('@media (max-width: 22.5rem)', mobile));
+    expect(narrow).toMatch(
+      /\.game-pile \.action-button\s*{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*white-space:\s*nowrap/,
+    );
+    const floor = css.slice(css.indexOf('@media (max-width: 22.5rem)'));
+    expect(floor).toMatch(/\.game-pile \.action-button\s*{[^}]*white-space:\s*normal/);
+  });
+
+  it('pins every gameplay paper surface with the Cartelera enamel pin, CSS-only', () => {
+    const pinRule = cssRules().find(
+      (rule) =>
+        rule.selector.includes('.game-pile::before') &&
+        rule.selector.includes('.game-player-zone::before') &&
+        rule.selector.includes('.game-own-hand::before'),
+    );
+    expect(pinRule).toBeDefined();
+    // The existing pin language: board core, yellow rim, perfect circle.
+    expect(pinRule?.body).toMatch(/border-radius:\s*50%/);
+    expect(pinRule?.body).toMatch(/background:\s*var\(--board\)/);
+    expect(pinRule?.body).toMatch(/border:\s*2px solid var\(--yellow\)/);
+    // Pins attach only to the actual paper surfaces — never to nested
+    // content or to the table itself.
+    for (const surface of [
+      '.game-table-heading',
+      '.game-own-hand',
+      '.game-pile',
+      '.game-player-zone',
+    ]) {
+      expect(cssRules().some((rule) => rule.selector.includes(`${surface}::before`))).toBe(true);
+    }
+    expect(cssRules().some((rule) => rule.selector.includes('.game-table::before'))).toBe(false);
+  });
+
+  it('keeps the table plane visually distinct from the page using only existing dark tokens', () => {
+    const table = cssRules().find((rule) => rule.selector === '.game-table');
+    expect(table?.body).toMatch(/--game-surface:\s*var\(--paper-ink\)/);
+    // No gradients, textures, or new colors enter the table plane.
+    expect(table?.body).not.toMatch(/gradient|url\(/);
+    const surfaceRule = cssRules().find(
+      (rule) =>
+        rule.selector === '.game-table' && rule.body.includes('background: var(--game-surface)'),
+    );
+    expect(surfaceRule).toBeDefined();
+  });
+
+  it('never uses a dashed border on a connected seated player avatar variant', () => {
+    const avatarRules = cssRules().filter((rule) => rule.selector.includes('.game-seat-avatar'));
+    expect(avatarRules.length).toBeGreaterThanOrEqual(4);
+    for (const rule of avatarRules) {
+      if (rule.selector.includes("data-avatar-variant='1'")) {
+        // The dashed provisional variant is gone: variant 1 is a tonal
+        // paper-raised face on the shared solid border.
+        expect(rule.body).not.toMatch(/border-style:\s*dashed/);
+        expect(rule.body).toMatch(/background:\s*var\(--paper-raised\)/);
+      }
+      expect(rule.body).not.toMatch(/border-style:\s*dashed/);
+    }
+    // The base avatar keeps its committed solid ink border.
+    const base = cssRules().find((rule) => rule.selector === '.game-seat-avatar');
+    expect(base?.body).toMatch(/border:\s*2px solid var\(--game-placeholder-ink\)/);
+  });
+
+  it('renders the center-action stage as a non-interactive, aria-hidden public surface', () => {
+    const { container } = render(
+      <GameTable controller={controllerStub()} state={threeSeatState()} />,
+    );
+    // Projection-only state: no stage at all.
+    expect(container.querySelector('.game-center-stage')).toBeNull();
   });
 });
 
