@@ -376,3 +376,60 @@ Observed evidence: 5/5 matches (one per player count) passed in 3 repeated runs.
 | `multiplayer-e2e.test.ts` repeated runs (2–6 clients) | 3/3 runs green |
 | `npm run build`, `npm run lint`, `npm run format:check` | clean |
 | `jest --detectOpenHandles` (server) | clean |
+
+## 25. Milestone 7 frontend tests — match result (WU10, implemented)
+
+The end-of-match surface is derived client-side from exactly one authoritative
+source: the public projection's `match.status === 'MATCH_END'`. The live
+`matchEnded`/`matchWinners` broadcast state is supplemental evidence only — it
+never triggers the result and only fills winner ids when the MATCH_END
+projection itself names none — so a reconnect after the finish renders the full
+result from the re-fanned projection alone.
+
+### Match-result selector (`apps/web/tests/match-result.test.ts`)
+
+- `isMatchOver` is true exactly when the authoritative projection announces `MATCH_END`; false for live views, a missing projection, and a malformed projection (fail-closed);
+- the result stays `none` without a `MATCH_END` projection, even with live broadcast winner evidence — supplemental state never triggers match-over;
+- the visible model is derived from the projection alone (no broadcast input), which is exactly the post-finish reconnect path;
+- projection winners are preferred over the supplemental broadcast ids; the broadcast ids are used only when the projection names none;
+- winner ids are validated (strings only), deduplicated preserving first-seen order, and resolved against the projected roster; unknown or malformed ids are dropped fail-closed and no raw id ever reaches the render model;
+- final victory tokens resolve for every roster player, in roster order, from the projection only;
+- shared-win detection (more than one resolved winner) and the honest no-winner state (totals still shown, no unresolvable winner named);
+- purity: identical inputs always produce a fresh, deep-equal model.
+
+### Game-table match-result surface (`apps/web/tests/game-table.test.tsx`)
+
+- live `matchEnded`/`matchWinners` broadcast flags alone never render a result while the projection still says the match is live;
+- the `MATCH_END` projection alone renders the dedicated centered result with winners resolved by name and the final totals — reconnect-safe;
+- the result renders as a `role="status"` live region with accessible name "Match result" so a newly reached final result is announced, and never as a named region;
+- the result replaces the playable table: no gameplay controls remain and no rematch action is offered (the server has no rematch contract; the no-rematch note is copy only);
+- supplemental broadcast winners are used only when the projection names none;
+- a winner id the roster cannot resolve is never rendered; a shared win announces every resolved winner;
+- the honest no-winner fallback still shows the authoritative final totals;
+- while the match is over but projections are missing, the table keeps the "table is being prepared" waiting state instead of a result.
+
+### Room route for finished rooms (`apps/web/tests/room-page.test.tsx`)
+
+- a seated `FINISHED` room renders through the game table, which shows the match-result surface;
+- an unseated visitor to a finished room stays on the lobby entry/rebind path and never sees a finished private game's result.
+
+### Observed evidence (final, this pass)
+
+The WU10 test-contract contradiction is resolved without production changes: the settled contract is `role="status"` with accessible name "Match result" (already implemented in `game-table.tsx`), and the tests were aligned to it — the stale `role="region"` assertions were replaced with `role="status"` queries including negative assertions, and the WU9 suppression fixture now supplies a real `MATCH_END` public projection instead of relying on the `game/match-ended` broadcast plus the `MATCH_ENDED` event alone.
+
+Observed this pass:
+
+- `match-result.test.ts`, `game-table.test.tsx`, and `round-result.test.tsx` — 3 suites / 89 tests — green;
+- full web suite (`npm test` in `apps/web`) — 23 suites / 377 tests — green, including the `room-page.test.tsx` suite.
+
+### Socket acceptance — observed evidence (this pass)
+
+The WU10 long socket acceptance (`apps/web/tests/socket-flow.integration.test.ts`, exact test name: "drives a two-seat match to MATCH_END, and a reconnecting seat keeps a projection-derived match result") ran by exact `testNamePattern` after `npm run build:packages` (clean) and is green:
+
+- the full two-seat match is driven command by command to `MATCH_END` over real sockets (~1.7 s) and the process exits cleanly — the fixture closes every tab socket and the Nest server in a `try/finally` guard, so a thrown assertion can no longer leak handles;
+- both tabs carry one canonical match-end projection: nonempty winner list, each tab's winners equal to the canonical list, winner ids roster-validated, a projected victory-token total ≥ 3, `round` cleared, and no round slip captured on the match-ending batch;
+- the live `match:ended` broadcast arrives as supplemental evidence and both rooms reach `FINISHED`;
+- a reconnecting seat restores the `MATCH_END` projection plus its private viewer binding and renders the result from that projection alone through the match-result selector: `visible`, roster-validated winners, and exactly 2 totals — the broadcast evidence is deliberately withheld;
+- green on two repeated focused runs (1 passed / 6 skipped per run).
+
+The full web suite in this pass: 23 suites / 377 tests — fully green. The earlier one-failure state (`round-result.test.tsx` "suppresses the slip entirely when the match has ended (WU10 owns that presentation)") was a test-contract defect, not a production defect: the fixture lacked the authoritative `MATCH_END` projection and the stale assertions queried `role="region"`; both are fixed, and the WU9/WU10 limitation entry in docs/08_IMPLEMENTATION_PLAN.md Milestone 7 has been closed.

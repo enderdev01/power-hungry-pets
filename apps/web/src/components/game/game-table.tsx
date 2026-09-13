@@ -15,6 +15,7 @@ import { CardPlaceholder } from '@/components/game/card-placeholder';
 import { PrivateDecisionModal } from '@/components/game/private-decision-modal';
 import type { CardAssetConfig } from '@/lib/game/asset-resolver';
 import { cardPresentation } from '@/lib/game/card-presentation';
+import { evaluateMatchResult, type MatchResultModel } from '@/lib/game/match-result';
 import { evaluatePendingDecision } from '@/lib/game/pending-decision';
 import {
   evaluateRoundResult,
@@ -58,6 +59,15 @@ function roundResultWinnersSentence(model: RoundResultModel): string | null {
   }
   const names = model.winners.map((winner) => winner.name);
   return model.sharedWin ? `${joinNames(names)} share the round.` : `${names[0]} wins the round.`;
+}
+
+/** WU10 match sentence: resolved visible winners only, never a raw id. */
+function matchResultWinnersSentence(model: MatchResultModel): string | null {
+  if (model.kind !== 'visible' || model.winners.length === 0) {
+    return null;
+  }
+  const names = model.winners.map((winner) => winner.name);
+  return model.sharedWin ? `${joinNames(names)} share the match.` : `${names[0]} wins the match.`;
 }
 
 function roundResultAwardSentence(award: {
@@ -200,6 +210,14 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // locally and sends no game command; a newly captured batch arrives as
   // a fresh evidence object and re-arms the slip.
   const resultModel = evaluateRoundResult(game.roundResult, publicView);
+  // WU10: match-over is derived only from the authoritative projection
+  // (`publicView.match.status === 'MATCH_END'`); the live matchEnded/
+  // matchWinners broadcast state is supplemental evidence at most, so a
+  // reconnect after the finish renders the full result from the projection
+  // alone. The dedicated centered surface replaces the playable table: the
+  // server has no rematch contract, so no rematch action is offered.
+  const matchResult = evaluateMatchResult(publicView, game.matchWinners);
+  const matchWinnersSentence = matchResultWinnersSentence(matchResult);
   const [dismissedResult, setDismissedResult] = useState<RoundResultEvidence | null>(null);
   // A WU8 mandatory modal owns the interaction while it is open: the slip is
   // hidden (not discarded) so its Continue is never visible-but-inert behind
@@ -282,18 +300,27 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
     };
   };
 
-  if (game.matchEnded) {
+  if (matchResult.kind === 'visible') {
     return (
       <>
-        <section className="game-table-message" role="status" aria-label="Match result">
-          {game.matchWinners.length === 0
-            ? 'The match is over.'
-            : `The match is over — ${game.matchWinners
-                .map(
-                  (winnerId) =>
-                    (publicView !== null ? playerNameById(publicView, winnerId) : null) ?? winnerId,
-                )
-                .join(' and ')} won.`}
+        <section className="game-match-result" role="status" aria-label="Match result">
+          <h1 className="game-match-result-title">The match is over</h1>
+          {matchWinnersSentence !== null ? (
+            <p className="game-match-result-winners">{matchWinnersSentence}</p>
+          ) : (
+            <p className="game-match-result-winners">No winner was announced.</p>
+          )}
+          <div className="game-match-result-totals">
+            <h2>Final score</h2>
+            <ul>
+              {matchResult.totals.map((total) => (
+                <li key={total.playerId}>{`${total.name}: ${tokenLabel(total.tokens)}`}</li>
+              ))}
+            </ul>
+          </div>
+          <p className="game-match-result-note">
+            No rematch is available — a new game starts with a new room.
+          </p>
         </section>
         {decisionOpen && (
           <PrivateDecisionModal

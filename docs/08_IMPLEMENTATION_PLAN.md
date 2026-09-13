@@ -191,7 +191,7 @@ All items are implemented; see the multiplayer architecture doc (docs/05_MULTIPL
 
 ---
 
-## Milestone 7 — Minimal playable frontend
+## Milestone 7 — Minimal playable frontend (complete, final socket acceptance green)
 
 Next.js:
 
@@ -208,9 +208,28 @@ Next.js:
 
 Do not prioritize polished artwork yet.
 
+### Completed work units (per delivery commits and code evidence)
+
+| Deliverable | Notes | Tests |
+|---|---|---|
+| Server-gated turn controls | draw/play rendered only from the viewer's own `legalActions` via the pure `turn-controls` selector | `apps/web/tests/turn-controls.test.ts` |
+| Published-target play controls | inline target choices derived only from published target options | `apps/web/tests/game-table.test.tsx`, `apps/web/tests/game-presentation.test.ts` |
+| Mandatory private decision modals (WU8) | Pecera/Ratón/Saqueadog private decisions owned by a modal over an inert table | `apps/web/tests/private-decision-modal.test.tsx`, `apps/web/tests/pending-decision.test.ts` |
+| Round-result slip (WU9) | live-batch-evidence-only information slip; no modal, no focus trap | `apps/web/tests/round-result.test.ts(x)` |
+| Match-result surface (WU10) | projection-derived end-of-match surface replacing the playable table; seated `FINISHED` route; no rematch action | `apps/web/tests/match-result.test.ts`, `apps/web/tests/game-table.test.tsx`, `apps/web/tests/room-page.test.tsx` |
+
+### Evidence limitations
+
+- **WU9 round slip is live-evidence-only.** The slip is captured from the one atomic `game:event` batch that announced the round end; a seat that reconnects after a round ends never receives that batch, so the slip is not restored (recorded as an open question in docs/09_OPEN_QUESTIONS.md). A match-ending round deliberately captures no slip: WU10 owns the match-end presentation.
+- **Final socket acceptance is green.** The long socket-flow integration test (`apps/web/tests/socket-flow.integration.test.ts`, "match-end acceptance over real sockets (WU10)") was run by exact `testNamePattern` after `build:packages` and passed end-to-end: full match to `MATCH_END` over real sockets, per-tab winners asserted against one canonical winner list, and a reconnecting seat deriving the result from the restored projection alone (docs/07_TEST_PLAN.md §25).
+- The earlier one-failure full-suite state (`round-result.test.tsx` "suppresses the slip entirely when the match has ended (WU10 owns that presentation)") was a test-contract defect, not a production defect: the fixture lacked the authoritative `MATCH_END` projection and the stale assertions queried `role="region"`. Both were fixed without production changes, and the full web suite is now green (docs/07_TEST_PLAN.md §25).
+
 ### Exit criteria
 
-A complete online match is playable in browser.
+- [x] Focused code gates green: `match-result.test.ts`, `game-table.test.tsx`, and `round-result.test.tsx` — 3 suites / 89 tests (observed this pass).
+- [x] Full web suite green: 23 suites / 377 tests, including the `room-page.test.tsx` suite (observed this pass).
+- [x] Final socket acceptance: the WU10 socket acceptance ran green by exact `testNamePattern` (docs/07_TEST_PLAN.md §25).
+- Rematch stays deferred/unsupported: `FINISHED` is terminal, the match-result surface offers no rematch action, and a new game starts with a new room (docs/09_OPEN_QUESTIONS.md).
 
 ---
 

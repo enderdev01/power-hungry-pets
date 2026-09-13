@@ -144,3 +144,32 @@ export function privateViewWithPending(
     pendingDecision,
   };
 }
+
+/**
+ * Terminal public view (WU10): the shape the server publishes once a match is
+ * over — the round is detached and the match roster carries the final victory
+ * tokens alongside the authoritative MATCH_END winners.
+ */
+export function matchEndPublicView(
+  matchOverrides: Partial<PublicGameView['match']> = {},
+  playerOverrides: {
+    selfTokens?: number;
+    otherTokens?: number;
+  } = {},
+): PublicGameView {
+  const [ana, bruno] = publicView().players;
+  return {
+    match: {
+      matchId: 'match-1',
+      status: 'MATCH_END',
+      roundNumber: 4,
+      winners: [SELF_ID],
+      ...matchOverrides,
+    },
+    players: [
+      { ...ana!, victoryTokens: playerOverrides.selfTokens ?? 3, handCount: 0 },
+      { ...bruno!, victoryTokens: playerOverrides.otherTokens ?? 1, handCount: 0 },
+    ],
+    round: null,
+  };
+}

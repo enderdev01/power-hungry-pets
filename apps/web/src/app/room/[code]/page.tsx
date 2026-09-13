@@ -31,7 +31,12 @@ export default function RoomPage() {
         <section className="game-table-message" role="status">
           Switching rooms — clearing the previous table.
         </section>
-      ) : state.room?.status === 'IN_MATCH' ? (
+      ) : state.room?.status === 'IN_MATCH' ||
+        (state.room?.status === 'FINISHED' && state.self !== null) ? (
+        // A seated finished room still shows the match result through the
+        // game table (WU10). A visitor with no restored seat stays on the
+        // lobby entry/rebind path and never sees a finished private game's
+        // result.
         <GameTable controller={controller} state={state} />
       ) : (
         <Lobby

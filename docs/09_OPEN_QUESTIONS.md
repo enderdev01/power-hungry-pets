@@ -149,7 +149,7 @@ Deliberate deferrals recorded so later milestones pick them up intentionally (do
 - **Room TTL / expiry / token expiry** — none exists; rooms and tokens live for the process lifetime, and the `EXPIRED` status is reachable only in principle.
 - **Per-IP / proxy-aware rate limiting** — per-socket limiting only (see above).
 - **Persistence** — everything is in-memory; a restart loses rooms, sessions, and tokens.
-- **Rematch** — `FINISHED` is terminal short of `EXPIRED`; no rematch flow or event exists.
+- **Rematch** — `FINISHED` is terminal short of `EXPIRED`; no rematch flow or event exists. Reconciled with the frontend in Milestone 7 (WU10): the match-result surface offers no rematch action and states copy-only that a new game starts with a new room. Rematch remains deferred/unsupported.
 - **Spectators** — every seat is a player; no observer role exists.
 - **Frontend** — Milestone 7; the socket contract is exercised only by real Socket.IO test clients.
 
@@ -168,6 +168,22 @@ No rule currently specifies what happens when a disconnected player does not ret
 Milestones 5–6 preserve the seat, token, and host status on disconnect and pause rather than auto-play cards; explicit leave is rejected mid-match.
 
 A later product decision may add a timeout/forfeit policy (Milestone 9 candidate).
+
+### Round slip after a reconnect
+
+Context:
+The WU9 round-result slip is captured only from the one atomic `game:event` batch that announced the round end; a seat that reconnects after a round ends never receives that batch, so the slip is not restored. The public projection does not re-publish a past round's result, and a match-ending round deliberately captures no slip (WU10 owns match-end presentation from the projection).
+
+Options:
+1. Keep the slip as live-evidence-only (current): honest, never stale, no protocol change; a reconnected seat simply never sees past round slips.
+2. Extend the public projection with the last ended round's result so reconnects can re-derive the slip.
+
+Affected:
+- UI
+- engine/protocol (option 2 only)
+- tests
+
+Status: OPEN
 
 ## How to add a question
 

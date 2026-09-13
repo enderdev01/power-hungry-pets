@@ -17,6 +17,7 @@ import type { GameState } from '@/lib/game/game-reducer';
 import type { RoomFlowController } from '@/lib/room-flow/controller';
 import type { CardType, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
 import {
+  matchEndPublicView,
   privateView,
   privateViewWithPending,
   publicView,
@@ -274,14 +275,135 @@ describe('game table shell', () => {
     expect(container.querySelectorAll('button')).toHaveLength(0);
   });
 
-  it('announces a match end with the winners resolved by name', () => {
+  it('never renders a match result from live broadcast flags alone', () => {
+    // WU10: the live matchEnded/matchWinners state is supplemental evidence
+    // only. The authoritative projection still says the match is live, so
+    // the table renders the live game and never a match result.
     render(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={flowState({ matchEnded: true, matchWinners: [OTHER_ID] })}
       />,
     );
-    expect(screen.getByText(/The match is over — Bruno won/i)).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Match result' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(/Waiting for Bruno/i);
+  });
+});
+
+describe('game table match result (WU10)', () => {
+  const matchEnd = matchEndPublicView();
+
+  function matchEndState(
+    overrides: {
+      matchEnded?: boolean;
+      matchWinners?: string[];
+      publicViewOverride?: PublicGameView | null;
+    } = {},
+  ): RoomFlowState {
+    const view =
+      overrides.publicViewOverride !== undefined ? overrides.publicViewOverride : matchEnd;
+    return flowState({
+      publicView: view,
+      privateView: view === null ? null : privateView(SELF_ID, [], [], view),
+      matchEnded: overrides.matchEnded ?? false,
+      matchWinners: overrides.matchWinners ?? [],
+    });
+  }
+
+  it('renders the centered match result from the authoritative projection alone (reconnect-safe)', () => {
+    // No live matchEnded flag and no broadcast winners: the MATCH_END
+    // projection alone must drive the result, exactly as after a
+    // post-finish reconnect.
+    render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={matchEndState()} />,
+    );
+    const result = screen.getByRole('status', { name: 'Match result' });
+    expect(within(result).getByText(/the match is over/i)).toBeInTheDocument();
+    expect(within(result).getByText('Ana wins the match.')).toBeInTheDocument();
+    // Final totals are visible, resolved by name.
+    expect(within(result).getByText('Ana: 3 victory tokens')).toBeInTheDocument();
+    expect(within(result).getByText('Bruno: 1 victory token')).toBeInTheDocument();
+    // WU10 owns the whole end surface: no round-result slip coexists with it.
+    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+  });
+
+  it('replaces the playable table: no gameplay controls and no rematch action', () => {
+    const { container } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={matchEndState()} />,
+    );
+    // The dedicated surface is the whole table; the server has no rematch
+    // contract, so no action can be offered — the honest note stays copy only.
+    expect(container.querySelector('.game-table')).toBeNull();
+    expect(container.querySelectorAll('button')).toHaveLength(0);
+  });
+
+  it('uses the supplemental broadcast winners only when the projection names none', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState({
+          matchWinners: [OTHER_ID],
+          publicViewOverride: matchEndPublicView({ winners: [] }),
+        })}
+      />,
+    );
+    expect(screen.getByText('Bruno wins the match.')).toBeInTheDocument();
+  });
+
+  it('never renders a raw winner id or an unresolvable winner', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState({
+          publicViewOverride: matchEndPublicView({ winners: [OTHER_ID, 'p-ghost'] }),
+        })}
+      />,
+    );
+    expect(screen.getByText('Bruno wins the match.')).toBeInTheDocument();
+    expect(screen.queryByText(/p-ghost/)).toBeNull();
+  });
+
+  it('announces a shared match win', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState({
+          publicViewOverride: matchEndPublicView({ winners: [SELF_ID, OTHER_ID] }),
+        })}
+      />,
+    );
+    expect(screen.getByText('Ana and Bruno share the match.')).toBeInTheDocument();
+  });
+
+  it('stays honest when no winner can be resolved', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState({
+          publicViewOverride: matchEndPublicView({ winners: ['p-ghost'] }),
+        })}
+      />,
+    );
+    const result = screen.getByRole('status', { name: 'Match result' });
+    expect(within(result).getByText(/no winner was announced/i)).toBeInTheDocument();
+    expect(within(result).queryByText(/wins the match/i)).toBeNull();
+    // The honest fallback still shows the authoritative final totals.
+    expect(within(result).getByText('Ana: 3 victory tokens')).toBeInTheDocument();
+  });
+
+  it('shows the waiting state while the match is over but projections are missing', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState({
+          publicViewOverride: null,
+          matchEnded: true,
+          matchWinners: [OTHER_ID],
+        })}
+      />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent(/table is being prepared/i);
+    expect(screen.queryByRole('status', { name: 'Match result' })).toBeNull();
   });
 });
 

@@ -16,6 +16,7 @@ import type { GamePublicEvent, PublicGameView } from '@power-hungry-pets/protoco
 import {
   OTHER_ID,
   THIRD_ID,
+  matchEndPublicView,
   privateView,
   privateViewWithPending,
   publicView,
@@ -472,7 +473,9 @@ describe('round result slip presentation (WU9)', () => {
 
   it('suppresses the slip entirely when the match has ended (WU10 owns that presentation)', () => {
     let game = liveGame();
-    game = gameReducer(game, { type: 'game/match-ended', winners: [SELF_ID] });
+    // A real match-ending fanout: the terminal MATCH_END public projection
+    // (the only authoritative match-over source) arrives alongside the
+    // broadcast batch and the live match-ended evidence.
     game = gameAfterEvents(
       [
         { type: 'ROUND_ENDED', winnerIds: [SELF_ID] },
@@ -480,6 +483,11 @@ describe('round result slip presentation (WU9)', () => {
       ],
       game,
     );
+    game = gameReducer(game, { type: 'game/match-ended', winners: [SELF_ID] });
+    game = gameReducer(game, {
+      type: 'game/public-state',
+      publicView: matchEndPublicView(),
+    });
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={stateWithGame(game)} />,
     );
