@@ -29,7 +29,18 @@ export interface SeatIdentity {
 }
 
 /** Action kinds this tab can attempt (and retry after a failure). */
-export type AttemptAction = 'create' | 'join' | 'rebind' | 'start' | 'leave' | 'draw' | 'play';
+export type AttemptAction =
+  | 'create'
+  | 'join'
+  | 'rebind'
+  | 'start'
+  | 'leave'
+  | 'draw'
+  | 'play'
+  | 'choose-target'
+  | 'submit-guess'
+  | 'choose-hidden-swap'
+  | 'choose-deck-position';
 
 /** What the player should do next after a failed attempt. */
 export type ErrorRecovery = 'retry' | 'edit-input' | 'rejoin' | 'none';
@@ -41,8 +52,14 @@ export interface Attempt {
   displayName?: string;
   /** Exact card instance id for a retried play command. */
   cardInstanceId?: string;
-  /** Exact target id for a retried targeted play command. */
+  /** Exact target id for a retried targeted play or choose-target command. */
   targetId?: string;
+  /** Exact guess value for a retried submit-guess command. */
+  value?: number;
+  /** Exact swap answer for a retried choose-hidden-swap command. */
+  swap?: boolean;
+  /** Exact deck index for a retried choose-deck-position command. */
+  index?: number;
 }
 
 /** A typed, human-facing server failure. */

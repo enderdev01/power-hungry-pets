@@ -127,3 +127,20 @@ export function privateView(
     pendingDecision: null,
   };
 }
+
+/**
+ * Private view carrying a viewer-matching pending decision (WU8): the shape
+ * the server sends only to the pending actor's own seat.
+ */
+export function privateViewWithPending(
+  viewerId: string,
+  pendingDecision: PrivateGameView['pendingDecision'],
+  legalActions: TurnCommand[],
+  hand: Array<{ instanceId: string; value: number; type: CardType }> = [],
+  publicViewOverride?: PublicGameView,
+): PrivateGameView {
+  return {
+    ...privateView(viewerId, hand, legalActions, publicViewOverride),
+    pendingDecision,
+  };
+}

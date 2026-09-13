@@ -17,6 +17,7 @@ import type { RoomFlowController } from '@/lib/room-flow/controller';
 import type { CardType, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
 import {
   privateView,
+  privateViewWithPending,
   publicView,
   roomSnapshotInMatch,
   SELF_ID,
@@ -29,7 +30,21 @@ function controllerStub() {
   return {
     drawCard: jest.fn<ReturnType<RoomFlowController['drawCard']>, []>(),
     playCard: jest.fn<ReturnType<RoomFlowController['playCard']>, [string, string?]>(),
-  } as unknown as Pick<RoomFlowController, 'drawCard' | 'playCard'>;
+    chooseTarget: jest.fn<ReturnType<RoomFlowController['chooseTarget']>, [string]>(),
+    submitGuess: jest.fn<ReturnType<RoomFlowController['submitGuess']>, [number]>(),
+    chooseHiddenSwap: jest.fn<ReturnType<RoomFlowController['chooseHiddenSwap']>, [boolean]>(),
+    chooseDeckPosition: jest.fn<ReturnType<RoomFlowController['chooseDeckPosition']>, [number]>(),
+    retry: jest.fn<ReturnType<RoomFlowController['retry']>, []>(),
+  } as unknown as Pick<
+    RoomFlowController,
+    | 'drawCard'
+    | 'playCard'
+    | 'chooseTarget'
+    | 'submitGuess'
+    | 'chooseHiddenSwap'
+    | 'chooseDeckPosition'
+    | 'retry'
+  >;
 }
 
 function flowState(
@@ -691,7 +706,9 @@ describe('game table target selection (WU7)', () => {
       />,
     );
     // Fail closed: an empty option group is a dead-end arm, so the card renders
-    // no arm control at all, no target choices, and no raw id.
+    // no arm control at all, no target choices, and no raw id. The table itself
+    // still renders normally (positive anchor), so these absences are meaningful.
+    expect(screen.getByText('Pecera de Cristal')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Play Pecera de Cristal' })).toBeNull();
     expect(screen.queryByRole('button', { name: /on /i })).toBeNull();
     expect(screen.queryByText(/p-ghost/)).toBeNull();
@@ -893,5 +910,223 @@ describe('game table target selection (WU7)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Cancel target' }));
     // The armed controls unmount on cancel; focus returns to the arm button.
     expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toHaveFocus();
+  });
+});
+
+describe('game table private decision modal (WU8)', () => {
+  const HIDDEN_CARD = {
+    instanceId: 'hidden-instance-1',
+    value: 6,
+    type: 'SAQUEADOG_DE_TUMBAS' as CardType,
+  };
+
+  const SWAP_ACTIONS: PrivateGameView['legalActions'] = [
+    { type: 'CHOOSE_HIDDEN_SWAP', actorId: SELF_ID, swap: false },
+    { type: 'CHOOSE_HIDDEN_SWAP', actorId: SELF_ID, swap: true },
+  ];
+
+  function swapState(
+    overrides: {
+      publicViewOverride?: PublicGameView;
+      privateViewOverride?: PrivateGameView | null;
+      busy?: RoomFlowState['busy'];
+      error?: RoomFlowState['error'];
+    } = {},
+  ): RoomFlowState {
+    const publicViewValue =
+      overrides.publicViewOverride ??
+      publicView({
+        round: roundView({
+          pendingInteraction: { type: 'SAQUEADOG_SWAP', actorId: SELF_ID },
+        }),
+      });
+    return flowState({
+      publicView: publicViewValue,
+      privateView:
+        overrides.privateViewOverride !== undefined
+          ? overrides.privateViewOverride
+          : privateViewWithPending(
+              SELF_ID,
+              { type: 'SAQUEADOG_SWAP', actorId: SELF_ID, hiddenCard: HIDDEN_CARD },
+              SWAP_ACTIONS,
+              [],
+              publicViewValue,
+            ),
+      busy: overrides.busy,
+      error: overrides.error,
+    });
+  }
+
+  it('opens the mandatory modal for the viewer-matching pending decision', () => {
+    render(<GameTable controller={controllerStub() as RoomFlowController} state={swapState()} />);
+    const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    // The private hidden card is visible to the addressed actor only.
+    expect(screen.getByLabelText(/Saqueadog de Tumbas, value 6/i)).toBeInTheDocument();
+  });
+
+  it('suppresses the actor-facing third-person pending copy while the modal is open', () => {
+    render(<GameTable controller={controllerStub() as RoomFlowController} state={swapState()} />);
+    expect(screen.queryByText(/Ana is making a private swap decision/i)).toBeNull();
+  });
+
+  it('keeps the public waiting copy for a non-actor and renders no modal', () => {
+    const otherPending = publicView({
+      round: roundView({
+        pendingInteraction: { type: 'SAQUEADOG_SWAP', actorId: OTHER_ID },
+      }),
+    });
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={swapState({
+          publicViewOverride: otherPending,
+          privateViewOverride: privateView(SELF_ID, [], [], otherPending),
+        })}
+      />,
+    );
+    expect(screen.getByText(/Bruno is making a private swap decision/i)).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('renders no modal from a stale public pending without private confirmation', () => {
+    // The public projection claims this viewer decides, but the private view
+    // carries no pendingDecision: fail closed with no invented controls.
+    const stalePublic = publicView({
+      round: roundView({
+        pendingInteraction: { type: 'SAQUEADOG_SWAP', actorId: SELF_ID },
+      }),
+    });
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={swapState({
+          publicViewOverride: stalePublic,
+          privateViewOverride: privateView(SELF_ID, [], [], stalePublic),
+        })}
+      />,
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('makes the table inert while the modal is open and interactive again after resolution', () => {
+    const controller = controllerStub();
+    const { container, rerender } = render(
+      <GameTable controller={controller as RoomFlowController} state={swapState()} />,
+    );
+    const table = container.querySelector('.game-table');
+    expect(table).toHaveAttribute('inert');
+
+    rerender(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={swapState({
+          publicViewOverride: publicView(),
+          privateViewOverride: privateView(SELF_ID),
+        })}
+      />,
+    );
+    expect(container.querySelector('.game-table')).not.toHaveAttribute('inert');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('sends the exact swap choice through the controller from the modal', async () => {
+    const controller = controllerStub();
+    render(<GameTable controller={controller as RoomFlowController} state={swapState()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Swap with the hidden card' }));
+    expect(controller.chooseHiddenSwap).toHaveBeenCalledTimes(1);
+    expect(controller.chooseHiddenSwap).toHaveBeenCalledWith(true);
+  });
+
+  it('restores focus to the gameplay element the viewer held before the modal', async () => {
+    const drawTurn = publicView({
+      round: roundView({ currentPlayerId: SELF_ID, phase: 'DRAW_REQUIRED' }),
+    });
+    const controller = controllerStub();
+    const { rerender } = render(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={swapState({
+          publicViewOverride: drawTurn,
+          privateViewOverride: privateView(
+            SELF_ID,
+            [],
+            [{ type: 'DRAW_CARD', actorId: SELF_ID }],
+            drawTurn,
+          ),
+        })}
+      />,
+    );
+    const drawButton = screen.getByRole('button', { name: 'Draw a card' });
+    drawButton.focus();
+    expect(drawButton).toHaveFocus();
+
+    // The pending decision opens the modal, then resolves.
+    rerender(<GameTable controller={controller as RoomFlowController} state={swapState()} />);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    rerender(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={swapState({
+          publicViewOverride: drawTurn,
+          privateViewOverride: privateView(
+            SELF_ID,
+            [],
+            [{ type: 'DRAW_CARD', actorId: SELF_ID }],
+            drawTurn,
+          ),
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Draw a card' })).toHaveFocus();
+  });
+
+  it('surfaces a pending-decision failure as an alert inside the modal with retry', async () => {
+    const controller = controllerStub();
+    render(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={swapState({
+          error: {
+            action: 'choose-hidden-swap',
+            code: 'ENGINE_REJECTED',
+            message: 'The game rules rejected that move.',
+            sentence: 'The swap could not be sent.',
+            recovery: 'retry',
+          },
+        })}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
+    // Exactly one live alert: the inert table must not duplicate it.
+    const alerts = within(dialog).getAllByRole('alert');
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0]).toHaveTextContent(/The swap could not be sent/i);
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    // The retry action lives inside the active modal, not the inert subtree.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    expect(controller.retry).toHaveBeenCalledTimes(1);
+    // The decision is still pending: the modal stays open over the inert table.
+    expect(dialog).toBeInTheDocument();
+  });
+
+  it('makes a no-recovery pending-decision failure perceivable without a retry path', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={swapState({
+          error: {
+            action: 'choose-hidden-swap',
+            code: 'ENGINE_REJECTED',
+            message: 'The game rules rejected that move.',
+            sentence: 'The swap could not be sent.',
+            recovery: 'none',
+          },
+        })}
+      />,
+    );
+    const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(/The swap could not be sent/i);
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
   });
 });

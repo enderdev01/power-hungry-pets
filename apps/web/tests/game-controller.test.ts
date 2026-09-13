@@ -480,3 +480,172 @@ describe('game commands (WU6)', () => {
     expect(f.state().error).toBeNull();
   });
 });
+
+describe('pending-decision commands (WU8)', () => {
+  it('sends the exact CHOOSE_TARGET command with actorId and targetId', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.chooseTarget(OTHER_ID);
+
+    expect(ok).toBe(true);
+    const sent = f.gateway.commandResults[0]?.input.command;
+    expect(sent).toEqual({ type: 'CHOOSE_TARGET', actorId: SELF_ID, targetId: OTHER_ID });
+    expect(
+      sent !== undefined && !('value' in sent) && !('swap' in sent) && !('index' in sent),
+    ).toBe(true);
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('sends the exact SUBMIT_GUESS command with actorId and value', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.submitGuess(7);
+
+    expect(ok).toBe(true);
+    const sent = f.gateway.commandResults[0]?.input.command;
+    expect(sent).toEqual({ type: 'SUBMIT_GUESS', actorId: SELF_ID, value: 7 });
+    expect(sent !== undefined && !('targetId' in sent)).toBe(true);
+  });
+
+  it('sends the exact CHOOSE_HIDDEN_SWAP command for both swap answers', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    expect(await f.controller.chooseHiddenSwap(false)).toBe(true);
+    expect(await f.controller.chooseHiddenSwap(true)).toBe(true);
+
+    expect(f.gateway.commandResults[0]?.input.command).toEqual({
+      type: 'CHOOSE_HIDDEN_SWAP',
+      actorId: SELF_ID,
+      swap: false,
+    });
+    expect(f.gateway.commandResults[1]?.input.command).toEqual({
+      type: 'CHOOSE_HIDDEN_SWAP',
+      actorId: SELF_ID,
+      swap: true,
+    });
+  });
+
+  it('sends the exact CHOOSE_DECK_POSITION command with actorId and index', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.chooseDeckPosition(3);
+
+    expect(ok).toBe(true);
+    const sent = f.gateway.commandResults[0]?.input.command;
+    expect(sent).toEqual({ type: 'CHOOSE_DECK_POSITION', actorId: SELF_ID, index: 3 });
+    expect(sent !== undefined && !('targetId' in sent) && !('value' in sent)).toBe(true);
+  });
+
+  it('sends no pending-decision command while this tab is unseated', async () => {
+    const f = fixture();
+
+    expect(await f.controller.chooseTarget(OTHER_ID)).toBe(false);
+    expect(await f.controller.submitGuess(7)).toBe(false);
+    expect(await f.controller.chooseHiddenSwap(true)).toBe(false);
+    expect(await f.controller.chooseDeckPosition(0)).toBe(false);
+    expect(f.gateway.commandResults).toHaveLength(0);
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('keeps the exact targetId in a retryable choose-target failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.chooseTarget(OTHER_ID)).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'choose-target',
+      code: 'ABC12',
+      targetId: OTHER_ID,
+    });
+  });
+
+  it('keeps the exact guess value in a retryable submit-guess failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.submitGuess(7)).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'submit-guess',
+      code: 'ABC12',
+      value: 7,
+    });
+  });
+
+  it('keeps the exact swap answer in a retryable choose-hidden-swap failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.chooseHiddenSwap(true)).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'choose-hidden-swap',
+      code: 'ABC12',
+      swap: true,
+    });
+  });
+
+  it('keeps the exact deck index in a retryable choose-deck-position failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.chooseDeckPosition(2)).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'choose-deck-position',
+      code: 'ABC12',
+      index: 2,
+    });
+  });
+
+  it('retries a failed pending decision with the byte-identical command', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('INTERNAL_ERROR', 'boom')));
+    await f.controller.chooseHiddenSwap(true);
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    expect(await f.controller.retry()).toBe(true);
+    expect(f.gateway.commandResults[1]?.input.command).toEqual({
+      type: 'CHOOSE_HIDDEN_SWAP',
+      actorId: SELF_ID,
+      swap: true,
+    });
+  });
+
+  it('retries a failed deck-position decision with the identical index', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('INTERNAL_ERROR', 'boom')));
+    await f.controller.chooseDeckPosition(0);
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    expect(await f.controller.retry()).toBe(true);
+    expect(f.gateway.commandResults[1]?.input.command).toEqual({
+      type: 'CHOOSE_DECK_POSITION',
+      actorId: SELF_ID,
+      index: 0,
+    });
+  });
+
+  it('never mutates game state from a pending-decision acknowledgement', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    await f.controller.chooseTarget(OTHER_ID);
+
+    expect(f.state().game.publicView).toBeNull();
+    expect(f.state().game.privateView).toBeNull();
+  });
+});

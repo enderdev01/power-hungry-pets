@@ -187,6 +187,14 @@ export interface RoomFlowController {
    * play carries its published target id, a targetless play omits it.
    */
   playCard(cardInstanceId: string, targetId?: string): Promise<boolean>;
+  /** Sends the exact `CHOOSE_TARGET` command for a pending Pecera target stage. */
+  chooseTarget(targetId: string): Promise<boolean>;
+  /** Sends the exact `SUBMIT_GUESS` command for a pending Pecera guess stage. */
+  submitGuess(value: number): Promise<boolean>;
+  /** Sends the exact `CHOOSE_HIDDEN_SWAP` command for a pending Saqueadog stage. */
+  chooseHiddenSwap(swap: boolean): Promise<boolean>;
+  /** Sends the exact `CHOOSE_DECK_POSITION` command for a pending Ratón stage. */
+  chooseDeckPosition(index: number): Promise<boolean>;
   /** Leaves the room this tab is seated in and clears its storage. */
   leaveRoom(): Promise<boolean>;
   /** Replays the pending attempt after a recoverable failure. */
@@ -366,25 +374,15 @@ export function createRoomFlowController(
     return pending;
   }
 
-  function sendCommand(
-    command: TurnCommand,
-    action: 'draw' | 'play',
-    cardInstanceId?: string,
-    targetId?: string,
-  ): Promise<boolean> {
+  function sendCommand(command: TurnCommand, attempt: Attempt): Promise<boolean> {
     const code = state.roomCode;
     const actorId = state.self?.playerId;
     const intentRevision = roomIntentRevision;
     if (code === null || actorId === undefined) {
       return Promise.resolve(false);
     }
-    const attempt: Attempt = {
-      action,
-      code,
-      ...(cardInstanceId !== undefined ? { cardInstanceId } : {}),
-      ...(targetId !== undefined ? { targetId } : {}),
-    };
-    dispatch({ type: 'busy/started', action });
+    const boundAttempt: Attempt = { ...attempt, code };
+    dispatch({ type: 'busy/started', action: boundAttempt.action });
     return (async () => {
       try {
         // The exact canonical command, byte-for-byte what the server expects:
@@ -401,7 +399,7 @@ export function createRoomFlowController(
           return false;
         }
         const ackError = asAckError(error);
-        fail(attempt, ackError.code, ackError.message);
+        fail(boundAttempt, ackError.code, ackError.message);
         return false;
       }
     })();
@@ -545,7 +543,7 @@ export function createRoomFlowController(
       if (actorId === undefined) {
         return false;
       }
-      return sendCommand({ type: 'DRAW_CARD', actorId }, 'draw');
+      return sendCommand({ type: 'DRAW_CARD', actorId }, { action: 'draw' });
     },
 
     async playCard(cardInstanceId: string, targetId?: string): Promise<boolean> {
@@ -557,9 +555,67 @@ export function createRoomFlowController(
         targetId === undefined
           ? { type: 'PLAY_CARD', actorId, cardInstanceId }
           : { type: 'PLAY_CARD', actorId, cardInstanceId, targetId },
-        'play',
-        cardInstanceId,
-        targetId,
+        {
+          action: 'play',
+          ...(cardInstanceId !== undefined ? { cardInstanceId } : {}),
+          ...(targetId !== undefined ? { targetId } : {}),
+        },
+      );
+    },
+
+    async chooseTarget(targetId: string): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand(
+        { type: 'CHOOSE_TARGET', actorId, targetId },
+        {
+          action: 'choose-target',
+          targetId,
+        },
+      );
+    },
+
+    async submitGuess(value: number): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand(
+        { type: 'SUBMIT_GUESS', actorId, value },
+        {
+          action: 'submit-guess',
+          value,
+        },
+      );
+    },
+
+    async chooseHiddenSwap(swap: boolean): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand(
+        { type: 'CHOOSE_HIDDEN_SWAP', actorId, swap },
+        {
+          action: 'choose-hidden-swap',
+          swap,
+        },
+      );
+    },
+
+    async chooseDeckPosition(index: number): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand(
+        { type: 'CHOOSE_DECK_POSITION', actorId, index },
+        {
+          action: 'choose-deck-position',
+          index,
+        },
       );
     },
 
@@ -609,6 +665,14 @@ export function createRoomFlowController(
           return controller.drawCard();
         case 'play':
           return controller.playCard(attempt.cardInstanceId ?? '', attempt.targetId);
+        case 'choose-target':
+          return controller.chooseTarget(attempt.targetId ?? '');
+        case 'submit-guess':
+          return controller.submitGuess(attempt.value ?? 0);
+        case 'choose-hidden-swap':
+          return controller.chooseHiddenSwap(attempt.swap ?? false);
+        case 'choose-deck-position':
+          return controller.chooseDeckPosition(attempt.index ?? 0);
       }
     },
 

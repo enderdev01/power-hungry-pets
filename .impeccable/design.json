@@ -162,6 +162,17 @@
         "purpose": "No transitions or animations are authored; states change instantly. The reduced-motion block exists to strip slip rotation and any future motion."
       }
     ],
+    "gameplayLayer": {
+      "name": "Digital Tabletop Arcade (gameplay layer)",
+      "purpose": "From match start the interface becomes a digital tabletop arcade: the table is the protagonist, cards are large, players sit around the table as avatars, the current action happens at the table's center, and mandatory private decisions appear in a centered modal over the inert table.",
+      "compositionRules": [
+        "The table owns the screen's center; administrative content stays minimal at the edges.",
+        "Cards are the biggest interactive objects at a 63:88 proportion; opponent hands read as face-down backs per seat.",
+        "Mandatory private decisions (Pecera target/guess, Saqueadog keep/swap, Ratón reinsertion) render in a centered modal: table visible but inert, focus trapped, Escape and outside clicks never dismiss it.",
+        "Warm physical feel, no HUD: no sci-fi chrome, no glassmorphism; soft physical shadows are deferred to Milestone 8."
+      ],
+      "m7Boundary": "Through Milestone 7 this layer governs composition only — no final artwork, textures, branded card frames, background art, or animation; placeholders and stable asset keys remain the standing seam for Milestone 8 polish."
+    },
     "breakpoints": [
       {
         "name": "stack",

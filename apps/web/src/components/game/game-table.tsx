@@ -12,8 +12,10 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { CardPlaceholder } from '@/components/game/card-placeholder';
+import { PrivateDecisionModal } from '@/components/game/private-decision-modal';
 import type { CardAssetConfig } from '@/lib/game/asset-resolver';
 import { cardPresentation } from '@/lib/game/card-presentation';
+import { evaluatePendingDecision } from '@/lib/game/pending-decision';
 import { evaluateTurnControls } from '@/lib/game/turn-controls';
 import type { RoomFlowController } from '@/lib/room-flow/room-flow';
 import type { RoomFlowState } from '@/lib/room-flow/reducer';
@@ -146,6 +148,11 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // The only legality source this table ever consults: the viewer's exact
   // authoritative legalActions, screened by the pure selector.
   const controls = evaluateTurnControls(privateView, viewerId);
+  // WU8: the mandatory private decision, derived only from the viewer-matched
+  // private projection plus its exact legal actions. A `none` model renders no
+  // modal; any other kind opens it over an inert table.
+  const decision = evaluatePendingDecision(privateView, viewerId);
+  const decisionOpen = decision.kind !== 'none';
   // One local armed-card selection at a time. The selection self-heals against
   // new projections: an armed card that no longer carries published target
   // options (or became targetless-playable) is simply no longer armed.
@@ -170,6 +177,7 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // before the effect runs.
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
   const armButtonRef = useRef<HTMLButtonElement | null>(null);
+  const tableRef = useRef<HTMLDivElement | null>(null);
   const focusIntentRef = useRef<'arm' | 'cancel' | null>(null);
   const lastArmedCardIdRef = useRef<string | null>(null);
 
@@ -219,16 +227,29 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
 
   if (game.matchEnded) {
     return (
-      <section className="game-table-message" role="status" aria-label="Match result">
-        {game.matchWinners.length === 0
-          ? 'The match is over.'
-          : `The match is over — ${game.matchWinners
-              .map(
-                (winnerId) =>
-                  (publicView !== null ? playerNameById(publicView, winnerId) : null) ?? winnerId,
-              )
-              .join(' and ')} won.`}
-      </section>
+      <>
+        <section className="game-table-message" role="status" aria-label="Match result">
+          {game.matchWinners.length === 0
+            ? 'The match is over.'
+            : `The match is over — ${game.matchWinners
+                .map(
+                  (winnerId) =>
+                    (publicView !== null ? playerNameById(publicView, winnerId) : null) ?? winnerId,
+                )
+                .join(' and ')} won.`}
+        </section>
+        {decisionOpen && (
+          <PrivateDecisionModal
+            decision={decision}
+            hand={ownHand}
+            busy={busy !== null}
+            onChooseTarget={(targetId) => void controller.chooseTarget(targetId)}
+            onSubmitGuess={(value) => void controller.submitGuess(value)}
+            onChooseHiddenSwap={(swap) => void controller.chooseHiddenSwap(swap)}
+            onChooseDeckPosition={(index) => void controller.chooseDeckPosition(index)}
+          />
+        )}
+      </>
     );
   }
 
@@ -240,152 +261,179 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
     );
   }
 
-  const pending = pendingPrompt(publicView);
+  // The actor's own decision is announced by the modal; the third-person pending
+  // line would only duplicate it. Non-actors keep the public waiting copy.
+  const pending = decisionOpen ? null : pendingPrompt(publicView);
   const round = publicView.round;
 
   return (
-    <div className="game-table" data-visual-system="m7-placeholders">
-      {state.error !== null && (
-        <section className="game-error" role="alert">
-          <p className="game-error-sentence">{state.error.sentence}</p>
-          {state.error.recovery === 'retry' && (
-            <button
-              type="button"
-              className="action-button"
-              onClick={() => {
-                void controller.retry();
-              }}
-            >
-              Try again
-            </button>
-          )}
+    <>
+      <div
+        ref={tableRef}
+        className="game-table"
+        data-visual-system="m7-placeholders"
+        tabIndex={-1}
+        inert={decisionOpen ? true : undefined}
+      >
+        {/* While the modal is open the table is inert, so the error slip is
+            mirrored inside the modal instead — one live alert, never two. */}
+        {!decisionOpen && state.error !== null && (
+          <section className="game-error" role="alert">
+            <p className="game-error-sentence">{state.error.sentence}</p>
+            {state.error.recovery === 'retry' && (
+              <button
+                type="button"
+                className="action-button"
+                onClick={() => {
+                  void controller.retry();
+                }}
+              >
+                Try again
+              </button>
+            )}
+          </section>
+        )}
+
+        <header className="game-table-heading">
+          <h1>Round {round?.roundNumber ?? publicView.match.roundNumber}</h1>
+          <p className="game-turn" role="status">
+            {turnPrompt(publicView, viewerId)}
+          </p>
+          {pending !== null && <p className="game-pending">{pending}</p>}
+        </header>
+
+        <section className="game-center" aria-label="Shared card area">
+          <div className="game-pile" data-token-role="draw-pile">
+            <h2>Draw pile</h2>
+            <CardPlaceholder faceDown label="Draw pile, face down" />
+            <p>{round?.drawPileCount ?? 0} cards</p>
+            {controls.drawAllowed && (
+              <button
+                type="button"
+                className="action-button"
+                disabled={busy !== null}
+                onClick={() => {
+                  void controller.drawCard();
+                }}
+              >
+                {busy === 'draw' ? 'Drawing…' : 'Draw a card'}
+              </button>
+            )}
+          </div>
+          <div className="game-pile" data-token-role="hidden-card">
+            <h2>Hidden card</h2>
+            {(round?.hiddenCardCount ?? 0) > 0 ? (
+              <CardPlaceholder faceDown label="Hidden card, face down" />
+            ) : (
+              <span className="game-empty-slot">No hidden card</span>
+            )}
+            <p>{round?.hiddenCardCount ?? 0} face down</p>
+          </div>
         </section>
-      )}
 
-      <header className="game-table-heading">
-        <h1>Round {round?.roundNumber ?? publicView.match.roundNumber}</h1>
-        <p className="game-turn" role="status">
-          {turnPrompt(publicView, viewerId)}
-        </p>
-        {pending !== null && <p className="game-pending">{pending}</p>}
-      </header>
+        <section className="game-players" aria-label="Players at the table">
+          <ul className="game-player-list">
+            {publicView.players.map((player) => (
+              <PlayerZone
+                key={player.id}
+                player={player}
+                assetConfig={assetConfig}
+                targetChoice={targetChoiceFor(player.id)}
+              />
+            ))}
+          </ul>
+        </section>
 
-      <section className="game-center" aria-label="Shared card area">
-        <div className="game-pile" data-token-role="draw-pile">
-          <h2>Draw pile</h2>
-          <CardPlaceholder faceDown label="Draw pile, face down" />
-          <p>{round?.drawPileCount ?? 0} cards</p>
-          {controls.drawAllowed && (
-            <button
-              type="button"
-              className="action-button"
-              disabled={busy !== null}
-              onClick={() => {
-                void controller.drawCard();
-              }}
-            >
-              {busy === 'draw' ? 'Drawing…' : 'Draw a card'}
-            </button>
-          )}
-        </div>
-        <div className="game-pile" data-token-role="hidden-card">
-          <h2>Hidden card</h2>
-          {(round?.hiddenCardCount ?? 0) > 0 ? (
-            <CardPlaceholder faceDown label="Hidden card, face down" />
+        <section className="game-own-hand" aria-label="Your hand">
+          <h2>Your hand</h2>
+          {ownHand === null ? (
+            <p data-hand-ready="false">Your hand has not arrived yet.</p>
+          ) : ownHand.length === 0 ? (
+            <p data-hand-ready="true">Your hand is empty right now.</p>
           ) : (
-            <span className="game-empty-slot">No hidden card</span>
-          )}
-          <p>{round?.hiddenCardCount ?? 0} face down</p>
-        </div>
-      </section>
-
-      <section className="game-players" aria-label="Players at the table">
-        <ul className="game-player-list">
-          {publicView.players.map((player) => (
-            <PlayerZone
-              key={player.id}
-              player={player}
-              assetConfig={assetConfig}
-              targetChoice={targetChoiceFor(player.id)}
-            />
-          ))}
-        </ul>
-      </section>
-
-      <section className="game-own-hand" aria-label="Your hand">
-        <h2>Your hand</h2>
-        {ownHand === null ? (
-          <p data-hand-ready="false">Your hand has not arrived yet.</p>
-        ) : ownHand.length === 0 ? (
-          <p data-hand-ready="true">Your hand is empty right now.</p>
-        ) : (
-          <ul className="game-hand-list" data-hand-ready="true">
-            {ownHand.map((card) => {
-              const playable = controls.playableCardIds.includes(card.instanceId);
-              // Target-only cards arm inline target selection. A card whose
-              // published targets all fail resolution maps to an empty list and
-              // must never render an armable control (fail closed — no dead-end
-              // arm).
-              const needsTarget =
-                !playable && (controls.targetOptionsByCardId[card.instanceId]?.length ?? 0) > 0;
-              const armedHere = armed !== null && armed.card.instanceId === card.instanceId;
-              const presentation = cardPresentation(card);
-              return (
-                <li
-                  key={card.instanceId}
-                  className="game-hand-entry"
-                  data-armed={armedHere ? 'true' : undefined}
-                >
-                  <CardPlaceholder card={card} showEffect assetConfig={assetConfig} />
-                  {playable && (
-                    <button
-                      type="button"
-                      className="action-button game-play-button"
-                      disabled={busy !== null}
-                      onClick={() => {
-                        void controller.playCard(card.instanceId);
-                      }}
-                    >
-                      {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
-                    </button>
-                  )}
-                  {needsTarget && !armedHere && (
-                    <button
-                      type="button"
-                      className="action-button game-play-button"
-                      disabled={busy !== null}
-                      ref={
-                        card.instanceId === lastArmedCardIdRef.current ? armButtonRef : undefined
-                      }
-                      onClick={() => {
-                        armTargetSelection(card.instanceId);
-                      }}
-                    >
-                      {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
-                    </button>
-                  )}
-                  {armedHere && (
-                    <>
-                      <p className="game-armed-prompt" role="status">
-                        {`Choose a target for ${presentation.name}.`}
-                      </p>
+            <ul className="game-hand-list" data-hand-ready="true">
+              {ownHand.map((card) => {
+                const playable = controls.playableCardIds.includes(card.instanceId);
+                // Target-only cards arm inline target selection. A card whose
+                // published targets all fail resolution maps to an empty list and
+                // must never render an armable control (fail closed — no dead-end
+                // arm).
+                const needsTarget =
+                  !playable && (controls.targetOptionsByCardId[card.instanceId]?.length ?? 0) > 0;
+                const armedHere = armed !== null && armed.card.instanceId === card.instanceId;
+                const presentation = cardPresentation(card);
+                return (
+                  <li
+                    key={card.instanceId}
+                    className="game-hand-entry"
+                    data-armed={armedHere ? 'true' : undefined}
+                  >
+                    <CardPlaceholder card={card} showEffect assetConfig={assetConfig} />
+                    {playable && (
                       <button
                         type="button"
                         className="action-button game-play-button"
                         disabled={busy !== null}
-                        ref={cancelButtonRef}
-                        onClick={cancelTargetSelection}
+                        onClick={() => {
+                          void controller.playCard(card.instanceId);
+                        }}
                       >
-                        Cancel target
+                        {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
                       </button>
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
-    </div>
+                    )}
+                    {needsTarget && !armedHere && (
+                      <button
+                        type="button"
+                        className="action-button game-play-button"
+                        disabled={busy !== null}
+                        ref={
+                          card.instanceId === lastArmedCardIdRef.current ? armButtonRef : undefined
+                        }
+                        onClick={() => {
+                          armTargetSelection(card.instanceId);
+                        }}
+                      >
+                        {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
+                      </button>
+                    )}
+                    {armedHere && (
+                      <>
+                        <p className="game-armed-prompt" role="status">
+                          {`Choose a target for ${presentation.name}.`}
+                        </p>
+                        <button
+                          type="button"
+                          className="action-button game-play-button"
+                          disabled={busy !== null}
+                          ref={cancelButtonRef}
+                          onClick={cancelTargetSelection}
+                        >
+                          Cancel target
+                        </button>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      </div>
+
+      {decisionOpen && (
+        <PrivateDecisionModal
+          decision={decision}
+          hand={ownHand}
+          busy={busy !== null}
+          restoreFocusRef={tableRef}
+          error={state.error}
+          onRetry={() => void controller.retry()}
+          onChooseTarget={(targetId) => void controller.chooseTarget(targetId)}
+          onSubmitGuess={(value) => void controller.submitGuess(value)}
+          onChooseHiddenSwap={(swap) => void controller.chooseHiddenSwap(swap)}
+          onChooseDeckPosition={(index) => void controller.chooseDeckPosition(index)}
+        />
+      )}
+    </>
   );
 }

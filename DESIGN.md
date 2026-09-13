@@ -123,6 +123,19 @@ The system is deliberately printed and tactile. Forms are printed-paper forms: h
 
 Every interaction answers textually and immediately: buttons rename themselves while busy ("Pinning the room…"), copy outcomes print a sentence, connection state reads as a line of text with a colored underline. Hover is never load-bearing; the interface must work one-handed on a phone, from a touch target, without any pointer resting on it.
 
+## Digital Tabletop Arcade (gameplay layer)
+
+Once the match starts, the interface stops being a stack of slips and becomes a **digital tabletop arcade**: a card table seen from above, the way a well-lit physical table reads in a digital UNO-like game. The table is the protagonist. The board's cork green remains the room around it, but the match screen is organized as one table surface, not as a column of documents.
+
+- **The table is the protagonist.** The shared card area — draw pile, hidden card, and the current action happening at the center — owns the screen's visual center and the largest share of its space. Administrative content (roster details, notices, connection lines) is minimal and stays at the edges, never between the player and the table.
+- **Large cards.** Cards are the biggest interactive objects on screen, held at a generous playable size with a recognizably card-like proportion (the recorded 63:88 ratio). Face-down stacks read as physical stacks; the viewer's own hand is fanned out large enough to read at arm's length.
+- **Avatars around the table.** Each player is a seated presence arranged around the table surface — name, token count, and status as a compact seat marker, not a full slip. Opponent hands read as face-down card backs in front of each seat.
+- **Center-table action.** Whatever is happening now — a played card, a reveal, a swap — is expressed at the table's center where the physical game would show it. The current turn is announced in one line, like a dealer's call.
+- **Important decisions centered.** When the server asks a player for a mandatory private decision (Pecera target or guess, Saqueadog keep/swap, Ratón reinsertion), that decision appears in a centered modal over the table: the table stays visible but inert behind it, focus is trapped inside, Escape and outside clicks do not dismiss it, and the addressed player's private information is shown only to them. Non-actors keep a one-line waiting copy at the table's edge.
+- **Warm physical feel, no HUD.** The tabletop reads as a warm, physical surface — soft physical shadows may lift cards off the table at Milestone 8 — never as a sci-fi HUD, glassmorphism, or dashboard chrome.
+
+**M7 placeholder boundary.** Through Milestone 7 this layer governs composition only: semantic structure, hierarchy, and where things sit. No final artwork, textures, branded card frames, background art, or animation belongs in the M7 build; placeholders and stable asset keys remain the standing seam, and this layer's full material expression is deferred to Milestone 8 polish (docs/10–12 record the user's visual-system decisions that polish will execute).
+
 **Key Characteristics:**
 
 - Dark cork-green board (#17332d) as the only page ground; cream paper (#f2e7cf) as the content voice.
