@@ -3,7 +3,8 @@
  * initial public view from the room:start acknowledgement, subscribe to the
  * game broadcasts through the injected gateway seam, ignore private state
  * addressed to a different seat or an unseated tab, ignore game payloads for a
- * different room code, and send exact server-authoritative game commands (WU6)
+ * different room code, and send exact server-authoritative game commands
+ * (WU6/WU7)
  * without ever mutating game state locally.
  */
 import {
@@ -293,12 +294,12 @@ describe('game commands (WU6)', () => {
     const ok = await f.controller.playCard('own-instance-1');
 
     expect(ok).toBe(true);
-    expect(f.gateway.commandResults[0]).toMatchObject({
-      input: {
-        code: 'ABC12',
-        command: { type: 'PLAY_CARD', actorId: SELF_ID, cardInstanceId: 'own-instance-1' },
-      },
-    });
+    // Targetless parity (WU7): the sent command is exactly the targetless shape
+    // — toEqual proves no extra keys, and the `in` check proves no latent
+    // `targetId: undefined` property is carried on the wire object.
+    const sent = f.gateway.commandResults[0]?.input.command;
+    expect(sent).toEqual({ type: 'PLAY_CARD', actorId: SELF_ID, cardInstanceId: 'own-instance-1' });
+    expect(sent !== undefined && !('targetId' in sent)).toBe(true);
     expect(f.state().busy).toBeNull();
   });
 
@@ -393,6 +394,78 @@ describe('game commands (WU6)', () => {
     expect(f.state().roomCode).toBeNull();
     expect(f.state().busy).toBeNull();
     expect(f.state().game.publicView).toBeNull();
+  });
+
+  it('sends the exact targeted PLAY_CARD command with actorId, cardInstanceId, and targetId', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.playCard('own-instance-2', OTHER_ID);
+
+    expect(ok).toBe(true);
+    expect(f.gateway.commandResults[0]).toMatchObject({
+      input: {
+        code: 'ABC12',
+        command: {
+          type: 'PLAY_CARD',
+          actorId: SELF_ID,
+          cardInstanceId: 'own-instance-2',
+          targetId: OTHER_ID,
+        },
+      },
+    });
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('keeps the exact card instance and target in a retryable targeted play failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.playCard('own-instance-2', OTHER_ID)).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'play',
+      code: 'ABC12',
+      cardInstanceId: 'own-instance-2',
+      targetId: OTHER_ID,
+    });
+  });
+
+  it('retries a failed targeted play with the identical targeted command', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('INTERNAL_ERROR', 'boom')));
+    await f.controller.playCard('own-instance-2', OTHER_ID);
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    expect(await f.controller.retry()).toBe(true);
+    expect(f.gateway.commandResults[1]).toMatchObject({
+      input: {
+        command: {
+          type: 'PLAY_CARD',
+          actorId: SELF_ID,
+          cardInstanceId: 'own-instance-2',
+          targetId: OTHER_ID,
+        },
+      },
+    });
+  });
+
+  it('omits targetId entirely from the attempt on a targetless play', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.playCard('own-instance-2')).toBe(false);
+    const attempt = f.state().pendingAttempt;
+    expect(attempt).toEqual({
+      action: 'play',
+      code: 'ABC12',
+      cardInstanceId: 'own-instance-2',
+    });
+    // targetId must be truly absent, not merely undefined-valued.
+    expect(attempt !== null && !('targetId' in attempt)).toBe(true);
   });
 
   it('clears a stale error once a later command succeeds', async () => {

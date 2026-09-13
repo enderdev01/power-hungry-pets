@@ -1,15 +1,16 @@
 'use client';
 
 /**
- * M7 game table (WU6 slice). It renders authoritative projections and
+ * M7 game table (WU6/WU7 slice). It renders authoritative projections and
  * configurable visual placeholders, plus the server-gated turn controls:
  * Draw renders exactly when the viewer's own legalActions carry DRAW_CARD,
  * Play renders per exact targetless PLAY_CARD action, and target-bearing
- * plays stay deferred to the WU7 target-selection work. Control rendering is
- * derived by the pure turn-controls selector; this component never infers
- * legality from phase, hand, or turn order, never mutates game state, and
- * final M8 art stays outside it.
+ * plays arm inline target choices derived only from the published target
+ * options. Control rendering is derived by the pure turn-controls selector;
+ * this component never infers legality from phase, hand, or turn order,
+ * never mutates game state, and final M8 art stays outside it.
  */
+import { useEffect, useRef, useState } from 'react';
 import { CardPlaceholder } from '@/components/game/card-placeholder';
 import type { CardAssetConfig } from '@/lib/game/asset-resolver';
 import { cardPresentation } from '@/lib/game/card-presentation';
@@ -60,10 +61,19 @@ function pendingPrompt(view: PublicGameView): string | null {
 interface PlayerZoneProps {
   player: PublicPlayerView;
   assetConfig?: CardAssetConfig;
+  /**
+   * Inline target choice for the viewer's armed play, rendered only for
+   * players the server published as legal targets. Display names only.
+   */
+  targetChoice?: {
+    cardName: string;
+    disabled: boolean;
+    onChoose: (targetId: string) => void;
+  };
 }
 
 /** Public-only player zone: opponent card identities never enter this component. */
-function PlayerZone({ player, assetConfig }: PlayerZoneProps) {
+function PlayerZone({ player, assetConfig, targetChoice }: PlayerZoneProps) {
   return (
     <li
       className="game-player-zone"
@@ -89,6 +99,18 @@ function PlayerZone({ player, assetConfig }: PlayerZoneProps) {
           <CardPlaceholder key={index} faceDown label={`Face-down card ${index + 1}`} />
         ))}
       </div>
+      {targetChoice !== undefined && (
+        <div className="game-target-controls">
+          <button
+            type="button"
+            className="action-button game-target-button"
+            disabled={targetChoice.disabled}
+            onClick={() => targetChoice.onChoose(player.id)}
+          >
+            {`Play ${targetChoice.cardName} on ${player.name}`}
+          </button>
+        </div>
+      )}
       {player.discards.length > 0 && (
         <div className="game-discards" role="group" aria-label={`${player.name} public discards`}>
           {player.discards.map((discard, index) => (
@@ -124,6 +146,76 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // The only legality source this table ever consults: the viewer's exact
   // authoritative legalActions, screened by the pure selector.
   const controls = evaluateTurnControls(privateView, viewerId);
+  // One local armed-card selection at a time. The selection self-heals against
+  // new projections: an armed card that no longer carries published target
+  // options (or became targetless-playable) is simply no longer armed.
+  const [armedCardId, setArmedCardId] = useState<string | null>(null);
+  const armedOptions =
+    armedCardId !== null ? controls.targetOptionsByCardId[armedCardId] : undefined;
+  const armedCard = ownHand?.find((card) => card.instanceId === armedCardId) ?? null;
+  const armed =
+    armedCardId !== null &&
+    armedCard !== null &&
+    armedOptions !== undefined &&
+    armedOptions.length > 0 &&
+    !controls.playableCardIds.includes(armedCardId)
+      ? { card: armedCard, options: armedOptions, name: cardPresentation(armedCard).name }
+      : null;
+
+  // Focus continuity: arming unmounts the arm button and canceling unmounts the
+  // armed controls. A ref-based effect keeps keyboard focus on a live control
+  // instead of dropping it to <body>. The intent ref scopes every focus move to
+  // an explicit arm/cancel click — never a projection self-heal — and the
+  // last-armed ref re-attaches the arm-button ref during the cancel commit,
+  // before the effect runs.
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const armButtonRef = useRef<HTMLButtonElement | null>(null);
+  const focusIntentRef = useRef<'arm' | 'cancel' | null>(null);
+  const lastArmedCardIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const intent = focusIntentRef.current;
+    focusIntentRef.current = null;
+    if (intent === 'cancel') {
+      cancelButtonRef.current?.focus();
+    } else if (intent === 'arm') {
+      armButtonRef.current?.focus();
+    }
+    lastArmedCardIdRef.current = armedCardId;
+  }, [armedCardId]);
+
+  const armTargetSelection = (instanceId: string): void => {
+    focusIntentRef.current = 'cancel';
+    setArmedCardId(instanceId);
+  };
+
+  const cancelTargetSelection = (): void => {
+    focusIntentRef.current = 'arm';
+    setArmedCardId(null);
+  };
+
+  const chooseTarget = (targetId: string): void => {
+    if (armed === null) {
+      return;
+    }
+    setArmedCardId(null);
+    void controller.playCard(armed.card.instanceId, targetId);
+  };
+
+  const targetChoiceFor = (playerId: string) => {
+    if (armed === null) {
+      return undefined;
+    }
+    const option = armed.options.find((candidate) => candidate.targetId === playerId);
+    if (option === undefined) {
+      return undefined;
+    }
+    return {
+      cardName: armed.name,
+      disabled: busy !== null,
+      onChoose: chooseTarget,
+    };
+  };
 
   if (game.matchEnded) {
     return (
@@ -210,7 +302,12 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
       <section className="game-players" aria-label="Players at the table">
         <ul className="game-player-list">
           {publicView.players.map((player) => (
-            <PlayerZone key={player.id} player={player} assetConfig={assetConfig} />
+            <PlayerZone
+              key={player.id}
+              player={player}
+              assetConfig={assetConfig}
+              targetChoice={targetChoiceFor(player.id)}
+            />
           ))}
         </ul>
       </section>
@@ -225,11 +322,20 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
           <ul className="game-hand-list" data-hand-ready="true">
             {ownHand.map((card) => {
               const playable = controls.playableCardIds.includes(card.instanceId);
-              const waitingOnTarget =
-                !playable && controls.waitingOnTargetCardIds.includes(card.instanceId);
+              // Target-only cards arm inline target selection. A card whose
+              // published targets all fail resolution maps to an empty list and
+              // must never render an armable control (fail closed — no dead-end
+              // arm).
+              const needsTarget =
+                !playable && (controls.targetOptionsByCardId[card.instanceId]?.length ?? 0) > 0;
+              const armedHere = armed !== null && armed.card.instanceId === card.instanceId;
               const presentation = cardPresentation(card);
               return (
-                <li key={card.instanceId} className="game-hand-entry">
+                <li
+                  key={card.instanceId}
+                  className="game-hand-entry"
+                  data-armed={armedHere ? 'true' : undefined}
+                >
                   <CardPlaceholder card={card} showEffect assetConfig={assetConfig} />
                   {playable && (
                     <button
@@ -243,15 +349,36 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
                       {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
                     </button>
                   )}
-                  {waitingOnTarget && (
+                  {needsTarget && !armedHere && (
                     <button
                       type="button"
                       className="action-button game-play-button"
-                      disabled
-                      aria-disabled="true"
+                      disabled={busy !== null}
+                      ref={
+                        card.instanceId === lastArmedCardIdRef.current ? armButtonRef : undefined
+                      }
+                      onClick={() => {
+                        armTargetSelection(card.instanceId);
+                      }}
                     >
-                      {`Play ${presentation.name} — needs a target`}
+                      {busy === 'play' ? 'Playing…' : `Play ${presentation.name}`}
                     </button>
+                  )}
+                  {armedHere && (
+                    <>
+                      <p className="game-armed-prompt" role="status">
+                        {`Choose a target for ${presentation.name}.`}
+                      </p>
+                      <button
+                        type="button"
+                        className="action-button game-play-button"
+                        disabled={busy !== null}
+                        ref={cancelButtonRef}
+                        onClick={cancelTargetSelection}
+                      >
+                        Cancel target
+                      </button>
+                    </>
                   )}
                 </li>
               );

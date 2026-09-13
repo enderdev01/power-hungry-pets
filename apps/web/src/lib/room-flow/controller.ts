@@ -182,8 +182,11 @@ export interface RoomFlowController {
   startMatch(): Promise<boolean>;
   /** Sends this viewer's authoritative `DRAW_CARD` command. */
   drawCard(): Promise<boolean>;
-  /** Sends the exact targetless `PLAY_CARD` command for one hand card. */
-  playCard(cardInstanceId: string): Promise<boolean>;
+  /**
+   * Sends the exact `PLAY_CARD` command for one hand card; a target-bearing
+   * play carries its published target id, a targetless play omits it.
+   */
+  playCard(cardInstanceId: string, targetId?: string): Promise<boolean>;
   /** Leaves the room this tab is seated in and clears its storage. */
   leaveRoom(): Promise<boolean>;
   /** Replays the pending attempt after a recoverable failure. */
@@ -367,6 +370,7 @@ export function createRoomFlowController(
     command: TurnCommand,
     action: 'draw' | 'play',
     cardInstanceId?: string,
+    targetId?: string,
   ): Promise<boolean> {
     const code = state.roomCode;
     const actorId = state.self?.playerId;
@@ -378,6 +382,7 @@ export function createRoomFlowController(
       action,
       code,
       ...(cardInstanceId !== undefined ? { cardInstanceId } : {}),
+      ...(targetId !== undefined ? { targetId } : {}),
     };
     dispatch({ type: 'busy/started', action });
     return (async () => {
@@ -543,12 +548,19 @@ export function createRoomFlowController(
       return sendCommand({ type: 'DRAW_CARD', actorId }, 'draw');
     },
 
-    async playCard(cardInstanceId: string): Promise<boolean> {
+    async playCard(cardInstanceId: string, targetId?: string): Promise<boolean> {
       const actorId = state.self?.playerId;
       if (actorId === undefined) {
         return false;
       }
-      return sendCommand({ type: 'PLAY_CARD', actorId, cardInstanceId }, 'play', cardInstanceId);
+      return sendCommand(
+        targetId === undefined
+          ? { type: 'PLAY_CARD', actorId, cardInstanceId }
+          : { type: 'PLAY_CARD', actorId, cardInstanceId, targetId },
+        'play',
+        cardInstanceId,
+        targetId,
+      );
     },
 
     async leaveRoom() {
@@ -596,7 +608,7 @@ export function createRoomFlowController(
         case 'draw':
           return controller.drawCard();
         case 'play':
-          return controller.playCard(attempt.cardInstanceId ?? '');
+          return controller.playCard(attempt.cardInstanceId ?? '', attempt.targetId);
       }
     },
 

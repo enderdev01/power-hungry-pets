@@ -39,8 +39,10 @@ export interface Attempt {
   action: AttemptAction;
   code?: string;
   displayName?: string;
-  /** Exact card instance id for a retried targetless play command. */
+  /** Exact card instance id for a retried play command. */
   cardInstanceId?: string;
+  /** Exact target id for a retried targeted play command. */
+  targetId?: string;
 }
 
 /** A typed, human-facing server failure. */

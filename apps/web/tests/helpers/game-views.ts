@@ -16,6 +16,7 @@ import type {
 
 export const SELF_ID = 'p-self';
 export const OTHER_ID = 'p-other';
+export const THIRD_ID = 'p-third';
 
 /** One public card. */
 export function card(value: number, type: CardType): PublicCard {
@@ -116,10 +117,11 @@ export function privateView(
     { instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' },
   ],
   legalActions: TurnCommand[] = [],
+  publicViewOverride?: PublicGameView,
 ): PrivateGameView {
   return {
     viewerId,
-    publicView: publicView(),
+    publicView: publicViewOverride ?? publicView(),
     hand,
     legalActions,
     pendingDecision: null,

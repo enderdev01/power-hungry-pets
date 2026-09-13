@@ -554,6 +554,39 @@ body {
   gap: 0.55rem;
 }
 
+/* WU7 target selection: enamel yellow marks only the armed selection (the
+   status-only color rule); disabled controls keep the dashed provisional
+   language; target choices are full-size paper buttons in the player zones. */
+
+.game-hand-entry[data-armed='true'] {
+  /* Doubly visible armed selection, matching the DESIGN.md focus treatment: an
+     enamel yellow ring directly against the dark board (well above the 3:1
+     non-text threshold) wrapped by a Paper Ink outline. Yellow alone is
+     ~1.45:1 on paper surfaces and is never sufficient alone. The flat ring is
+     a hard-edged stamp, not elevation. */
+  box-shadow: 0 0 0 2px var(--yellow);
+  outline: 3px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+
+.game-armed-prompt {
+  margin: 0;
+  font-weight: 700;
+}
+
+.game-target-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+  min-height: 3rem;
+}
+
+.game-target-button {
+  min-width: 9rem;
+}
+
 @media (max-width: 46rem) {
   .game-center,
   .game-player-list {
