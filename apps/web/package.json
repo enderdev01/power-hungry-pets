@@ -3,11 +3,27 @@
   "version": "0.0.0",
   "private": true,
   "dependencies": {
-    "@power-hungry-pets/shared": "0.0.0"
+    "@power-hungry-pets/protocol": "0.0.0",
+    "next": "^15.5.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@next/eslint-plugin-next": "^15.5.4",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.5.2",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "jest-environment-jsdom": "^29.7.0"
   },
   "scripts": {
-    "build": "tsc -b",
-    "lint": "eslint src",
-    "format:check": "prettier --check src"
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "npm --prefix ../.. run build:packages && jest --config jest.config.cjs --runInBand",
+    "lint": "eslint src tests",
+    "format:check": "prettier --check src tests jest.config.cjs jest.setup.ts"
   }
 }

@@ -7,8 +7,9 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b",
-    "test": "npm run test --workspaces --if-present",
+    "build": "tsc -b && npm run build --workspaces --if-present",
+    "build:packages": "tsc -b packages/protocol packages/shared packages/ui packages/game-engine apps/server",
+    "test": "npm run build:packages && npm run test --workspaces --if-present",
     "lint": "eslint .",
     "format:check": "prettier --check ."
   },

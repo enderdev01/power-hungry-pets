@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-13T01:20:50Z",
+  "title": "Design System: Power Hungry Pets",
+  "extensions": {
+    "colorMeta": {
+      "noticeboard-green": {
+        "role": "neutral",
+        "displayName": "Noticeboard Green",
+        "canonical": "#17332d",
+        "tonalRamp": [
+          "#07150b",
+          "#0e743a",
+          "#4c5840",
+          "#487d5e",
+          "#67a57d",
+          "#87ce9e",
+          "#a9f9c1",
+          "#eaffee"
+        ]
+      },
+      "paper": {
+        "role": "primary",
+        "displayName": "Printed Paper",
+        "canonical": "#f2e7cf",
+        "tonalRamp": [
+          "#0d1107",
+          "#504e11",
+          "#484c4f",
+          "#667148",
+          "#869867",
+          "#a8c187",
+          "#cbeba9",
+          "#f0ffe9"
+        ]
+      },
+      "paper-ink": {
+        "role": "neutral",
+        "displayName": "Paper Ink",
+        "canonical": "#22312c",
+        "tonalRamp": [
+          "#08140b",
+          "#206b37",
+          "#72553e",
+          "#517b5c",
+          "#71a27c",
+          "#91cb9d",
+          "#b3f6bf",
+          "#ecffee"
+        ]
+      },
+      "paper-faded": {
+        "role": "neutral",
+        "displayName": "Faded Ink",
+        "canonical": "#5c6a5f",
+        "tonalRamp": [
+          "#09130a",
+          "#25662b",
+          "#7c5439",
+          "#547957",
+          "#73a076",
+          "#94ca97",
+          "#b6f4b9",
+          "#ecffed"
+        ]
+      },
+      "paper-raised": {
+        "role": "neutral",
+        "displayName": "Raised Paper",
+        "canonical": "#fffaf0",
+        "tonalRamp": [
+          "#0c1209",
+          "#435927",
+          "#43507f",
+          "#617555",
+          "#819c74",
+          "#a2c595",
+          "#c5f0b7",
+          "#efffec"
+        ]
+      },
+      "coral": {
+        "role": "secondary",
+        "displayName": "Coral",
+        "canonical": "#e05a3f",
+        "tonalRamp": [
+          "#270500",
+          "#5e0000",
+          "#840400",
+          "#a93c04",
+          "#d06662",
+          "#f79053",
+          "#ffbb75",
+          "#ffffe0"
+        ]
+      },
+      "coral-ink": {
+        "role": "secondary",
+        "displayName": "Coral Ink",
+        "canonical": "#a3341f",
+        "tonalRamp": [
+          "#230702",
+          "#580000",
+          "#7c2900",
+          "#a14828",
+          "#c6703e",
+          "#ed995f",
+          "#ffc481",
+          "#ffffe2"
+        ]
+      },
+      "enamel-yellow": {
+        "role": "tertiary",
+        "displayName": "Enamel Yellow",
+        "canonical": "#f1b94b",
+        "tonalRamp": [
+          "#170b00",
+          "#441600",
+          "#637900",
+          "#855a00",
+          "#a78000",
+          "#caa81b",
+          "#efd248",
+          "#f8ffda"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The room code only — 2.4rem bold monospace, 0.35em tracking."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "The POWER HUNGRY PETS wordmark — printed masthead tracking."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "One uppercase slip title per slip, never stacked."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "All sentences on paper; slips stay narrow enough to skip a measure clamp."
+      },
+      "hint": {
+        "displayName": "Hint",
+        "purpose": "Supporting sentences: statuses, recovery copy, empty states."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Rubber-stamped field labels and slip section headers."
+      },
+      "tag": {
+        "displayName": "Tag",
+        "purpose": "HOST and presence chips — the smallest stamped voice."
+      }
+    },
+    "motion": [
+      {
+        "name": "reduced-motion-policy",
+        "value": "prefers-reduced-motion: reduce -> transition: none !important; animation: none !important; slip tilt: none",
+        "purpose": "No transitions or animations are authored; states change instantly. The reduced-motion block exists to strip slip rotation and any future motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "stack",
+        "value": "46rem",
+        "purpose": "At or below 46rem, side-by-side slip arrangements stack into a single column in reading order."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Paper Slip with Pin",
+      "kind": "card",
+      "refersTo": "slip",
+      "description": "The signature container: a cream paper slip pinned to the dark board, tilted slightly, square-cornered with a 1px ink border.",
+      "html": "<section class=\"ds-slip\"><span class=\"ds-slip-pin\" aria-hidden=\"true\"></span><h2 class=\"ds-slip-title\">Tonight's invitation</h2><p class=\"ds-slip-body\">Every content region on the board is a slip.</p></section>",
+      "css": ".ds-slip { position: relative; background: var(--paper, #f2e7cf); color: var(--paper-ink, #22312c); border: 1px solid var(--paper-ink, #22312c); padding: 1.5rem 1.75rem 1.6rem; transform: rotate(-0.7deg); } .ds-slip-pin { position: absolute; top: 0.55rem; left: 0.55rem; width: 0.8rem; height: 0.8rem; border-radius: 50%; background: var(--board, #17332d); border: 2px solid var(--enamel-yellow, #f1b94b); } .ds-slip-title { margin: 0 0 1rem; font-size: 1.35rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; } .ds-slip-body { margin: 0; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; line-height: 1.5; } @media (prefers-reduced-motion: reduce) { .ds-slip { transform: none; } }"
+    },
+    {
+      "name": "Action Button",
+      "kind": "button",
+      "refersTo": "action-button",
+      "description": "Printed-paper button: paper face, 2px ink border, 3rem minimum height; hover lifts to raised paper, disabled goes dashed and faded.",
+      "html": "<button type=\"button\" class=\"ds-btn\">Pin a new room</button>\n<button type=\"button\" class=\"ds-btn\" disabled>Pinning the room…</button>",
+      "css": ".ds-btn { display: inline-block; min-height: 3rem; min-width: 3rem; padding: 0.55rem 1.3rem; font: inherit; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-weight: 700; letter-spacing: 0.04em; color: var(--paper-ink, #22312c); background: var(--paper, #f2e7cf); border: 2px solid var(--paper-ink, #22312c); border-radius: 2px; cursor: pointer; transition: background 0.15s ease; } .ds-btn:hover:not(:disabled) { background: var(--paper-raised, #fffaf0); } .ds-btn:disabled { border-style: dashed; opacity: 0.55; cursor: not-allowed; } .ds-btn:focus-visible { box-shadow: 0 0 0 2px var(--enamel-yellow, #f1b94b); outline: 3px solid var(--paper-ink, #22312c); outline-offset: 2px; } @media (prefers-reduced-motion: reduce) { .ds-btn { transition: none; } }"
+    },
+    {
+      "name": "Field with Label",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "Ruled paper field: rubber-stamp label above a raised-paper input with a 2px ink border and ink caret.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-name\">Your name</label><input id=\"ds-name\" class=\"ds-field-input\" autocomplete=\"off\" /></div>",
+      "css": ".ds-field { margin: 0 0 1.1rem; } .ds-field-label { display: block; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; margin: 0 0 0.35rem; color: var(--paper-ink, #22312c); } .ds-field-input { display: block; width: 100%; min-height: 3rem; padding: 0.4rem 0.7rem; font: inherit; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; color: var(--paper-ink, #22312c); background: var(--paper-raised, #fffaf0); caret-color: var(--paper-ink, #22312c); border: 2px solid var(--paper-ink, #22312c); border-radius: 2px; } .ds-field-input:focus-visible { box-shadow: 0 0 0 2px var(--enamel-yellow, #f1b94b); outline: 3px solid var(--paper-ink, #22312c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Room Code Input",
+      "kind": "input",
+      "refersTo": "field-input",
+      "description": "The stamped code variant of the field: uppercase-forced, 0.3em tracking, bold — typed codes look pre-stamped.",
+      "html": "<div class=\"ds-field\"><label class=\"ds-field-label\" for=\"ds-code\">Room code</label><input id=\"ds-code\" class=\"ds-field-input ds-code-input\" maxlength=\"5\" autocomplete=\"off\" spellcheck=\"false\" /></div>",
+      "css": ".ds-field { margin: 0 0 1.1rem; } .ds-field-label { display: block; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; margin: 0 0 0.35rem; color: var(--paper-ink, #22312c); } .ds-field-input { display: block; width: 100%; min-height: 3rem; padding: 0.4rem 0.7rem; font: inherit; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; color: var(--paper-ink, #22312c); background: var(--paper-raised, #fffaf0); caret-color: var(--paper-ink, #22312c); border: 2px solid var(--paper-ink, #22312c); border-radius: 2px; } .ds-code-input { text-transform: uppercase; letter-spacing: 0.3em; font-weight: 700; } .ds-field-input:focus-visible { box-shadow: 0 0 0 2px var(--enamel-yellow, #f1b94b); outline: 3px solid var(--paper-ink, #22312c); outline-offset: 2px; }"
+    },
+    {
+      "name": "Room Code Display",
+      "kind": "custom",
+      "refersTo": "room-code",
+      "description": "The one display-voice moment: the room code as a machine-stamped monospace serial on paper.",
+      "html": "<h1 class=\"ds-room-code\">ABCDE</h1>",
+      "css": ".ds-room-code { margin: 0 0 0.9rem; font-family: 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 2.4rem; font-weight: 700; letter-spacing: 0.35em; color: var(--paper-ink, #22312c); }"
+    },
+    {
+      "name": "Host and Presence Chips",
+      "kind": "chip",
+      "refersTo": "host-tag",
+      "description": "Stamped tags: solid-ink HOST, outlined presence, coral-ink 'away' so absence reads with words and ink, not color alone.",
+      "html": "<span class=\"ds-chip ds-host-tag\">HOST</span> <span class=\"ds-chip ds-presence\">at the board</span> <span class=\"ds-chip ds-presence ds-presence-away\">away</span>",
+      "css": ".ds-chip { display: inline-block; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; padding: 0.15rem 0.45rem; border-radius: 2px; } .ds-host-tag { background: var(--paper-ink, #22312c); color: var(--paper, #f2e7cf); } .ds-presence { color: var(--paper-ink, #22312c); border: 1px solid var(--paper-ink, #22312c); } .ds-presence-away { color: var(--coral-ink, #a3341f); border-color: var(--coral-ink, #a3341f); }"
+    },
+    {
+      "name": "Connection Line",
+      "kind": "custom",
+      "refersTo": "action-button",
+      "description": "One serif sentence whose colored underline confirms state: yellow when connected, coral when disconnected or erroring, plain when idle. The words inform; the rule confirms.",
+      "html": "<p class=\"ds-connection-line\" data-connection=\"connected\">At the game noticeboard.</p>\n<p class=\"ds-connection-line\" data-connection=\"disconnected\">The line to the board dropped — reconnecting…</p>",
+      "css": ".ds-connection-line { margin: 0; font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif; font-size: 0.95rem; letter-spacing: 0.03em; color: var(--paper, #f2e7cf); } .ds-connection-line[data-connection='connected'] { border-bottom: 2px solid var(--enamel-yellow, #f1b94b); display: inline-block; padding-bottom: 0.1rem; } .ds-connection-line[data-connection='disconnected'], .ds-connection-line[data-connection='error'] { border-bottom: 2px solid var(--coral, #e05a3f); display: inline-block; padding-bottom: 0.1rem; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Cartelera de la partida",
+    "overview": "The interface is a dark community noticeboard. Every screen is a cork-green board; every piece of content is a printed paper slip pinned to it with an enamel pin. A room begins as one large, slightly tilted invitation slip — the player's name, the room code, the actions — and guests arrive as further name slips gathering around it in real time. Nothing is a floating panel: content is physically attached to the board, the way a convocation flyer is attached to a neighborhood corkboard.\n\nThe system is deliberately printed and tactile. Forms are printed-paper forms: heavy small-caps labels stamped above ruled fields, flat ink-bordered buttons, monospaced room codes set like hand-stamped serials. Depth comes from physical affordances — a tilted slip, a pin head, a lighter paper field — never from glow, glass, or shadow. Color is scarce on purpose: the board is dark, the paper is warm, and the only saturated hues (coral, enamel yellow) are reserved for status, connection, and focus.\n\nEvery interaction answers textually and immediately: buttons rename themselves while busy, copy outcomes print a sentence, connection state reads as a line of text with a colored underline. Hover is never load-bearing; the interface must work one-handed on a phone, from a touch target, without any pointer resting on it.",
+    "keyCharacteristics": [
+      "Dark cork-green board (#17332d) as the only page ground; cream paper (#f2e7cf) as the content voice.",
+      "Flat bordered paper slips with enamel pins; no gradients, no glass, no equal-card grids.",
+      "Coral (#e05a3f) and enamel yellow (#f1b94b) reserved for error/connection/focus/selection — never decoration.",
+      "Heavy uppercase labels with wide tracking; monospace only for room codes.",
+      "Depth by pin and tilt (±0.7°), not shadow; focus is the only box-shadow on the page.",
+      "Textual confirmation for every action; hover is never required.",
+      "3rem minimum interactive height; slips destack and untilt under prefers-reduced-motion."
+    ],
+    "rules": [
+      {
+        "name": "The Status-Only Color Rule",
+        "body": "Coral and enamel yellow never decorate. They mark error, connection state, keyboard focus, and selection — and nothing else. If a hue appears without a state behind it, it is a defect.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rubber-Stamp Label Rule",
+        "body": "Labels are small, bold, widely tracked uppercase set in the same serif as the body — they read as stamped headings, not as a sans-serif UI font dropped in from another world.",
+        "section": "typography"
+      },
+      {
+        "name": "The Pin, Not the Shadow Rule",
+        "body": "Depth is expressed by what attaches a slip to the board — the enamel pin and the ±0.7° tilt — never by cast light. Shadows are for focus only.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do reserve coral (#e05a3f) and enamel yellow (#f1b94b) for error, connection, focus, and selection states — per the Status-Only Color Rule.",
+      "Do answer every action textually: busy labels (\"Pinning the room…\"), status sentences, and connection lines. The board speaks.",
+      "Do keep interactive targets at least 3rem tall; hover is never required to reach any state.",
+      "Do keep keyboard focus doubly visible: 0 0 0 2px Enamel Yellow ring plus a 3px Paper Ink outline at 2px offset.",
+      "Do tilt slips subtly (±0.7° max) and drop all tilt and motion under prefers-reduced-motion.",
+      "Do use dashed borders for provisional things: disabled actions, empty slots, notice separators.",
+      "Do use Coral Ink (#a3341f), not Coral, for any alarm-colored text on paper (5.6:1)."
+    ],
+    "donts": [
+      "Don't add gradients, glassmorphism, or drop shadows; the board is flat and depth comes from pins and tilt.",
+      "Don't invent a ninth color; the palette is closed at eight tokens.",
+      "Don't arrange content into equal-card grids of identical tiles; slips differ by role, tilt, and content.",
+      "Don't rely on color alone to carry status — every state also has text or a label.",
+      "Don't set the monospace voice anywhere except room codes (typed and displayed).",
+      "Don't round corners beyond 2px or make pill shapes; paper is cut, not molded.",
+      "Don't let animation imply game state; presentation may animate authorized events but never determines them."
+    ]
+  }
+}

@@ -1,0 +1,169 @@
+{
+  "title": "Elegí el mundo visual del flujo de sala",
+  "question": "El primer bloque debe sentirse como la antesala de una noche de juego, no como un panel SaaS. Elegí una dirección, una alternativa o pedí otra tirada.",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "Cartelera de la partida",
+      "kicker": "THE ROLL",
+      "lineage": "carteleras comunitarias y fichas de convocatoria",
+      "thesis": "La sala nace como una invitación clavada en una cartelera y cada jugador llega como una ficha física.",
+      "palette": ["#17332d", "#f2e7cf", "#e05a3f", "#f1b94b"],
+      "materials": ["corcho oscuro", "papel impreso", "chinches esmaltadas"],
+      "viewport": "Una gran invitación inclinada contiene nombre, código y acciones; las fichas de jugadores se suman alrededor en tiempo real.",
+      "risk": "Puede verse artesanal de más si la jerarquía del código y los estados no permanece nítida.",
+      "raised": [
+        {
+          "from": "ascii-live",
+          "raise": "La llegada de jugadores se expresa como un cambio vivo y visible, no como una lista estática."
+        },
+        {
+          "from": "phosphor-terminal",
+          "raise": "Cada evento de conexión recibe una confirmación inmediata y textual."
+        },
+        {
+          "from": "iridescent-edge",
+          "raise": "El color queda reservado para bordes de estado y foco, preservando legibilidad."
+        }
+      ],
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "brand + connection", "x": 0, "y": 0, "w": 12, "h": 1 },
+          { "label": "room invitation", "x": 1, "y": 2, "w": 6, "h": 6, "accent": true },
+          { "label": "player slips", "x": 8, "y": 2, "w": 3, "h": 5 },
+          { "label": "host action", "x": 8, "y": 8, "w": 3, "h": 1, "accent": true }
+        ]
+      }
+    },
+    {
+      "id": "model-pick",
+      "label": "Mesa lista para jugar",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "paño de juego, atriles y fichas de puntuación",
+      "thesis": "Desde la portada ya se ve una mesa preparada: crear o unirse equivale a ocupar una silla.",
+      "palette": ["#163f36", "#f3d98b", "#d94a3d", "#17201e"],
+      "materials": ["paño mate", "madera pintada", "fichas troqueladas"],
+      "viewport": "Dos lugares vacíos dominan la mesa; el nombre se escribe una vez y cada acción ocupa su propio atril.",
+      "risk": "Es la dirección más familiar para juegos de cartas y puede resultar previsible.",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "wordmark", "x": 1, "y": 1, "w": 4, "h": 2 },
+          { "label": "create seat", "x": 1, "y": 4, "w": 4, "h": 4, "accent": true },
+          { "label": "join seat", "x": 7, "y": 4, "w": 4, "h": 4 },
+          { "label": "connection", "x": 9, "y": 1, "w": 2, "h": 1 }
+        ]
+      }
+    },
+    {
+      "id": "industrial-labels",
+      "label": "Etiquetas de equipamiento",
+      "verdict": "competitive",
+      "lineage": "indumentaria industrial y rótulos de stockroom",
+      "thesis": "Sala, código, host y conexión se rotulan como piezas físicas listas para entrar en servicio.",
+      "palette": ["#f4f1e8", "#111111", "#ef5b2a", "#d9c43b"],
+      "materials": ["algodón crudo", "nylon negro", "etiquetas naranjas"],
+      "viewport": "Una diagonal separa crear de unirse; el código de sala cuelga como etiqueta principal.",
+      "case": "Identifica bien estados y acciones y evita el look SaaS; pierde calidez social frente a la dirección asignada.",
+      "risk": "La gramática de advertencia puede hacer que una acción casual parezca peligrosa.",
+      "hero": "https://impeccable.style/worlds/cards/textiles-weave-drape-fashion-industrial-quote-grammar-hero.webp",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "ROOM", "x": 0, "y": 0, "w": 4, "h": 10, "accent": true },
+          { "label": "CREATE", "x": 5, "y": 2, "w": 6, "h": 3 },
+          { "label": "JOIN", "x": 5, "y": 6, "w": 6, "h": 3 }
+        ]
+      }
+    },
+    {
+      "id": "starship-crew",
+      "label": "Terminal de tripulación",
+      "verdict": "competitive",
+      "lineage": "terminales de tripulación de ciencia ficción usada",
+      "thesis": "El grupo aborda una partida privada y cada conexión queda confirmada como ingreso de tripulación.",
+      "palette": ["#111715", "#9be27d", "#f2b84b", "#d7d0b7"],
+      "materials": ["CRT curvo", "panel esmaltado", "placas de equipo"],
+      "viewport": "El código funciona como identificación de misión y las personas conectadas aparecen en una placa lateral.",
+      "case": "La metáfora de reunir una tripulación favorece al grupo remoto; pierde claridad si el terminal invade los formularios.",
+      "risk": "Puede empujar al producto hacia ciencia ficción, una promesa que el juego no hace.",
+      "hero": "https://impeccable.style/worlds/cards/pop-culture-shelf-industrial-starship-terminal-hero.webp",
+      "wireframe": {
+        "cols": 12,
+        "rows": 10,
+        "regions": [
+          { "label": "mission code", "x": 1, "y": 1, "w": 7, "h": 2, "accent": true },
+          { "label": "command pane", "x": 1, "y": 4, "w": 7, "h": 5 },
+          { "label": "crew", "x": 9, "y": 1, "w": 2, "h": 8 }
+        ]
+      }
+    },
+    {
+      "id": "ascii-live",
+      "label": "Escena ASCII viva",
+      "verdict": "declined",
+      "lineage": "escenas renderizadas con caracteres",
+      "thesis": "La mesa y los jugadores aparecen como una escena textual que se recompone con cada conexión.",
+      "palette": ["#07110d", "#9af58f", "#d8ffc9"],
+      "materials": ["rejilla monoespaciada", "densidad de glifos"],
+      "viewport": "Una mesa ASCII ocupa el fondo y los controles viven dentro de la misma grilla.",
+      "case": "Tiene movimiento e identidad, pero sacrifica lectura móvil y reconocimiento del juego de cartas.",
+      "kept": "La presencia de cada jugador debe alterar la escena de inmediato.",
+      "risk": "La novedad tipográfica puede ocultar formularios y estados esenciales.",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-ascii-live-scene-render-hero.webp"
+    },
+    {
+      "id": "phosphor-terminal",
+      "label": "Terminal fósforo",
+      "verdict": "declined",
+      "lineage": "terminales de fósforo verde",
+      "thesis": "Crear y unirse son comandos y el lobby se imprime como historial de eventos.",
+      "palette": ["#050807", "#73ef72", "#2a6b35"],
+      "materials": ["vidrio oscuro", "brillo fósforo"],
+      "viewport": "Un único transcript recibe nombre, código y confirmaciones de conexión.",
+      "case": "La respuesta de estado es excelente, pero la interacción parece una herramienta técnica, no una noche de juego.",
+      "kept": "Toda acción debe responder con confirmación textual instantánea.",
+      "risk": "Convierte una entrada social en una consola para expertos.",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-phosphor-terminal-midnight-hero.webp"
+    },
+    {
+      "id": "iridescent-edge",
+      "label": "Borde iridiscente",
+      "verdict": "declined",
+      "lineage": "bordes de nubes iridiscentes",
+      "thesis": "Una interfaz casi blanca concentra todo el estado en bandas de color que se forman y disuelven.",
+      "palette": ["#f8f7f1", "#3f4a50", "#88d7bd", "#c887d8"],
+      "materials": ["papel blanco", "bandas espectrales finas"],
+      "viewport": "El formulario queda aislado en un gran campo claro y el estado de red vive en su borde activo.",
+      "case": "La claridad es alta, pero la identidad no conecta con el ritual social del juego.",
+      "kept": "El color se reserva para foco, conexión y cambios de estado.",
+      "risk": "Puede sentirse como una herramienta de observación científica.",
+      "hero": "https://impeccable.style/worlds/cards/clouds-storms-auroras-iridescent-cloud-edge-hero.webp"
+    }
+  ],
+  "reroll": { "registers": ["safer", "bolder"] },
+  "buildPath": { "value": "code" },
+  "canon": true,
+  "canonCard": {
+    "label": "El estándar de la categoría",
+    "thesis": "Una portada de juego online con panel centrado, dos botones y lobby en tarjetas, ejecutada con oficio.",
+    "palette": ["#ffffff", "#172033", "#6c5ce7"],
+    "materials": ["grilla limpia", "tarjetas planas"],
+    "viewport": "Logo arriba, nombre al centro y acciones crear/unirse debajo.",
+    "risk": "Funciona, pero sería intercambiable con cualquier juego casual.",
+    "wireframe": {
+      "cols": 12,
+      "rows": 10,
+      "regions": [
+        { "label": "logo", "x": 4, "y": 1, "w": 4, "h": 2 },
+        { "label": "name", "x": 3, "y": 4, "w": 6, "h": 1 },
+        { "label": "actions", "x": 3, "y": 6, "w": 6, "h": 2 }
+      ]
+    }
+  },
+  "steer": true
+}

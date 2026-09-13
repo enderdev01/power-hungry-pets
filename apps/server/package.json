@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "tsc -b",
+    "start": "node -e \"const { createServer } = require('./dist/main.js'); createServer({ port: Number(process.env.PORT || 3001) }).then((handles) => console.log('power-hungry-pets server listening on ' + handles.port));\"",
     "test": "jest --config jest.config.cjs --runInBand",
     "lint": "eslint src tests",
     "format:check": "prettier --check src tests"
@@ -15,6 +16,7 @@
     "@nestjs/platform-socket.io": "^11.1.9",
     "@nestjs/websockets": "^11.1.9",
     "@power-hungry-pets/game-engine": "0.0.0",
+    "@power-hungry-pets/protocol": "0.0.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "socket.io": "^4.8.1"

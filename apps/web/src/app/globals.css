@@ -1,0 +1,572 @@
+/* Power Hungry Pets — Milestone 7 room-flow slice.
+   Approved direction: "Cartelera de la partida" (impeccable seed 9719d81e).
+   Dark community noticeboard, printed paper slips, enamel pins.
+   Color is reserved for status and focus. */
+
+:root {
+  --board: #17332d;
+  --paper: #f2e7cf;
+  --paper-ink: #22312c;
+  --paper-faded: #5c6a5f;
+  --coral: #e05a3f;
+  --coral-ink: #a3341f; /* coral darkened for text on paper: 5.6:1 */
+  --yellow: #f1b94b;
+  --paper-raised: #fffaf0; /* lightest paper tint: ruled fields and hover */
+  color-scheme: dark; /* UA chrome (scrollbars, form fallbacks) stays on-palette */
+  scrollbar-color: var(--paper) var(--board);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--board);
+  color: var(--paper);
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.home,
+.lobby {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+.masthead {
+  margin-bottom: 2rem;
+}
+
+.wordmark {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  margin: 0 0 0.35rem;
+  text-transform: uppercase;
+}
+
+.masthead-line {
+  margin: 0;
+  color: var(--paper);
+  opacity: 0.85;
+}
+
+/* Paper slips: the room's physical invitations. */
+
+.slip {
+  position: relative;
+  background: var(--paper);
+  color: var(--paper-ink);
+  border: 1px solid var(--paper-ink);
+  padding: 1.5rem 1.75rem 1.6rem;
+  margin: 0 0 1.75rem;
+  transform: rotate(-0.7deg);
+}
+
+.slip:nth-of-type(even) {
+  transform: rotate(0.55deg);
+}
+
+.roster {
+  transform: rotate(0.55deg);
+}
+
+/* Enamel pin: pushes the slip into the board. */
+
+.pin {
+  position: absolute;
+  top: 0.55rem;
+  left: 0.55rem;
+  width: 0.8rem;
+  height: 0.8rem;
+  border-radius: 50%;
+  background: var(--board);
+  border: 2px solid var(--yellow);
+}
+
+.pin-error {
+  background: var(--coral);
+  border-color: var(--paper-ink);
+}
+
+.invitation-title {
+  font-size: 1.35rem;
+  margin: 0 0 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.field {
+  margin: 0 0 1.1rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0 0 0.35rem;
+  color: var(--paper-ink);
+}
+
+.field-input {
+  display: block;
+  width: 100%;
+  min-height: 3rem;
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  color: var(--paper-ink);
+  background: var(--paper-raised);
+  caret-color: var(--paper-ink);
+  border: 2px solid var(--paper-ink);
+  border-radius: 2px;
+}
+
+.code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-weight: 700;
+}
+
+.join-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.join-row .field-input {
+  flex: 1 1 10rem;
+}
+
+.actions {
+  margin-top: 1.25rem;
+}
+
+.action-button {
+  display: inline-block;
+  min-height: 3rem;
+  min-width: 3rem;
+  padding: 0.55rem 1.3rem;
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--paper-ink);
+  background: var(--paper);
+  border: 2px solid var(--paper-ink);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.action-button:hover:not(:disabled) {
+  background: var(--paper-raised);
+}
+
+.action-button:disabled {
+  border-style: dashed;
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.divider {
+  text-align: center;
+  letter-spacing: 0.3em;
+  margin: 1rem 0;
+  color: var(--paper-faded);
+}
+
+.hint {
+  margin: 0.6rem 0 0;
+  font-size: 0.95rem;
+}
+
+.room-code {
+  font-size: 2.4rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  margin: 0 0 0.9rem;
+  font-family: 'SFMono-Regular', Menlo, Consolas, monospace;
+}
+
+.connection-line {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+}
+
+.connection-line[data-connection='connected'] {
+  border-bottom: 2px solid var(--yellow);
+  display: inline-block;
+  padding-bottom: 0.1rem;
+}
+
+.connection-line[data-connection='disconnected'],
+.connection-line[data-connection='error'] {
+  border-bottom: 2px solid var(--coral);
+  display: inline-block;
+  padding-bottom: 0.1rem;
+}
+
+.error-slip {
+  border: 2px solid var(--coral);
+}
+
+.error-sentence {
+  margin: 0 0 0.9rem;
+  font-weight: 700;
+}
+
+.lobby-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.75rem;
+}
+
+@media (max-width: 46rem) {
+  .lobby-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.player-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.player-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  border: 1px dashed var(--paper-faded);
+  border-radius: 2px;
+  padding: 0.55rem 0.75rem;
+  min-height: 2.9rem;
+}
+
+.player-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.player-meta {
+  color: var(--paper-faded);
+  font-size: 0.85rem;
+}
+
+.host-tag,
+.presence {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+}
+
+.host-tag {
+  background: var(--paper-ink);
+  color: var(--paper);
+}
+
+.presence {
+  color: var(--paper-ink);
+  border: 1px solid var(--paper-ink);
+}
+
+.presence.away {
+  color: var(--coral-ink);
+  border-color: var(--coral-ink);
+}
+
+.notice-log .notice-list {
+  max-height: 14rem;
+  overflow-y: auto;
+  scrollbar-color: var(--paper-faded) var(--paper);
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.notice {
+  margin: 0;
+  border-bottom: 1px dashed var(--paper-faded);
+  padding-bottom: 0.3rem;
+}
+
+.notice-success {
+  font-weight: 700;
+}
+
+.notice-error {
+  color: var(--coral-ink);
+  font-weight: 700;
+}
+
+/* M7 game placeholders. These semantic aliases are the M8 configuration seam:
+   assets, geometry, materials, and motion remain intentionally undecided. */
+
+.game-table {
+  --game-surface: var(--board);
+  --game-placeholder-surface: var(--paper);
+  --game-placeholder-ink: var(--paper-ink);
+  --game-status-accent: var(--yellow);
+  --game-danger-accent: var(--coral-ink);
+  --game-outline: 1px solid var(--game-placeholder-ink);
+  --game-layout-gap: 1rem;
+  --game-card-min-inline: 7rem;
+  --game-card-max-inline: 13rem;
+  --game-card-min-block: 6.5rem;
+  --game-card-compact-inline: 4.5rem;
+  --game-card-compact-max-inline: 7rem;
+  --game-card-compact-block: 5rem;
+  display: grid;
+  gap: var(--game-layout-gap);
+  color: var(--paper);
+  background: var(--game-surface);
+}
+
+.game-table-heading,
+.game-table-message,
+.game-own-hand {
+  background: var(--game-placeholder-surface);
+  color: var(--game-placeholder-ink);
+  border: var(--game-outline);
+  padding: 1rem;
+}
+
+.game-table-heading h1,
+.game-own-hand h2,
+.game-pile h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-turn,
+.game-pending,
+.game-pile p,
+.game-player-zone p {
+  margin: 0.35rem 0 0;
+}
+
+.game-turn {
+  font-weight: 700;
+}
+
+.game-center {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--game-layout-gap);
+}
+
+.game-pile,
+.game-player-zone {
+  background: var(--game-placeholder-surface);
+  color: var(--game-placeholder-ink);
+  border: var(--game-outline);
+  padding: 0.85rem;
+}
+
+.game-pile {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: 0.6rem;
+}
+
+.game-player-list,
+.game-hand-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--game-layout-gap);
+}
+
+.game-player-list {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.game-player-zone[data-eliminated='true'] {
+  border-style: dashed;
+}
+
+.game-player-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.game-player-header span,
+.game-player-zone p {
+  font-size: 0.85rem;
+}
+
+.game-status-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-height: 1.4rem;
+  margin-top: 0.5rem;
+}
+
+.game-status-list span {
+  border: 1px solid currentColor;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.game-player-zone[data-protected='true'] .game-status-list {
+  color: var(--game-placeholder-ink);
+  text-decoration: underline var(--game-status-accent) 3px;
+  text-underline-offset: 0.2rem;
+}
+
+.game-player-zone[data-eliminated='true'] .game-status-list {
+  color: var(--game-danger-accent);
+}
+
+.game-opponent-hand,
+.game-discards,
+.game-hand-list {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-top: 0.75rem;
+}
+
+.game-card-placeholder {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.25rem 0.5rem;
+  align-content: start;
+  min-width: var(--game-card-min-inline);
+  max-width: var(--game-card-max-inline);
+  min-height: var(--game-card-min-block);
+  padding: 0.55rem;
+  color: var(--game-placeholder-ink);
+  background: var(--game-placeholder-surface);
+  border: var(--game-outline);
+}
+
+.game-card-placeholder-back {
+  place-items: center;
+  min-width: var(--game-card-compact-inline);
+  min-height: var(--game-card-compact-block);
+  border-style: dashed;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.game-card-art {
+  grid-column: 1 / -1;
+  display: grid;
+  place-items: center;
+  min-height: 2.5rem;
+  padding: 0.35rem;
+  border: 1px dashed var(--paper-faded);
+  color: var(--paper-faded);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.game-card-art img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.game-card-value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-card-name {
+  font-weight: 700;
+}
+
+.game-card-effect {
+  grid-column: 1 / -1;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+}
+
+.game-discards .game-card-placeholder,
+.game-opponent-hand .game-card-placeholder {
+  min-width: var(--game-card-compact-inline);
+  max-width: var(--game-card-compact-max-inline);
+  min-height: var(--game-card-compact-block);
+}
+
+.game-discards .game-card-art,
+.game-discards .game-card-effect {
+  display: none;
+}
+
+.game-empty-slot {
+  display: grid;
+  place-items: center;
+  min-width: var(--game-card-compact-inline);
+  min-height: var(--game-card-compact-block);
+  border: 1px dashed var(--paper-faded);
+  padding: 0.5rem;
+  color: var(--paper-faded);
+  text-align: center;
+}
+
+@media (max-width: 46rem) {
+  .game-center,
+  .game-player-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-card-placeholder {
+    max-width: 100%;
+  }
+}
+
+/* Selection, caret, and scrollbar surfaces are themed from the palette. */
+
+::selection {
+  background: var(--yellow);
+  color: var(--paper-ink);
+}
+
+/* Accessibility: keyboard focus is always visible; motion is optional. */
+
+:focus-visible {
+  box-shadow: 0 0 0 2px var(--yellow);
+  outline: 3px solid var(--paper-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  .slip,
+  .slip:nth-of-type(even),
+  .roster {
+    transform: none;
+  }
+}
