@@ -24,6 +24,19 @@ import {
   type RoundResultModel,
 } from '@/lib/game/round-result';
 import { evaluateTurnControls } from '@/lib/game/turn-controls';
+import {
+  advanceMotionConsumer,
+  discardMotionForPlayer,
+  discardOriginLabel,
+  handMotionForPlayer,
+  initialMotionConsumerState,
+  tableShuffleMotion,
+  zoneMotionForPlayer,
+  type ActiveMotion,
+  type DiscardMotion,
+  type MotionConsumerState,
+  type ZoneMotion,
+} from '@/lib/game/presentation-motion';
 import type { RoomFlowController } from '@/lib/room-flow/room-flow';
 import type { RoomFlowState } from '@/lib/room-flow/reducer';
 import type { PublicGameView, PublicPlayerView } from '@power-hungry-pets/protocol';
@@ -122,16 +135,41 @@ interface PlayerZoneProps {
     disabled: boolean;
     onChoose: (targetId: string) => void;
   };
+  /**
+   * M8 one-shot motion cues, pre-resolved for this player by the pure
+   * presentation-motion mapping. `null` renders no motion attribute at all.
+   * Zone-level cues are attributed on the zone but animate only its
+   * non-interactive hand surface: the zone subtree hosts the target
+   * controls and never remounts for motion.
+   */
+  zoneMotion?: ZoneMotion | null;
+  handMotion?: ZoneMotion | null;
+  discardMotion?: DiscardMotion | null;
+  /**
+   * Sequence of an active table-level shuffle cue; remounts only the face-down
+   * backs so the gather replays once per batch without touching the controls.
+   */
+  shuffleSequence?: number;
 }
 
 /** Public-only player zone: opponent card identities never enter this component. */
-function PlayerZone({ player, assetConfig, targetChoice }: PlayerZoneProps) {
+function PlayerZone({
+  player,
+  assetConfig,
+  targetChoice,
+  zoneMotion,
+  handMotion,
+  discardMotion,
+  shuffleSequence,
+}: PlayerZoneProps) {
   return (
     <li
       className="game-player-zone"
       data-player-id={player.id}
       data-eliminated={player.eliminated}
       data-protected={player.protected}
+      data-motion={zoneMotion?.kind}
+      data-motion-sequence={zoneMotion?.sequence}
     >
       <header className="game-player-header">
         <strong>{player.name}</strong>
@@ -143,12 +181,28 @@ function PlayerZone({ player, assetConfig, targetChoice }: PlayerZoneProps) {
         {player.eliminated && <span>eliminated</span>}
       </div>
       <div
+        // One-shot cue replay keys the non-interactive hand surface only:
+        // a draw settle, exchange, or actor settle remounts the face-down
+        // backs, never the zone subtree that hosts the target controls.
+        key={
+          handMotion !== null && handMotion !== undefined
+            ? `hand-m${handMotion.sequence}`
+            : zoneMotion !== null && zoneMotion !== undefined
+              ? `hand-z${zoneMotion.sequence}`
+              : 'hand'
+        }
         className="game-opponent-hand"
         role="group"
         aria-label={handCountLabel(player.handCount)}
+        data-motion={handMotion?.kind}
+        data-motion-sequence={handMotion?.sequence}
       >
         {Array.from({ length: player.handCount }, (_, index) => (
-          <CardPlaceholder key={index} faceDown label={`Face-down card ${index + 1}`} />
+          <CardPlaceholder
+            key={shuffleSequence !== undefined ? `back-${index}-s${shuffleSequence}` : index}
+            faceDown
+            label={`Face-down card ${index + 1}`}
+          />
         ))}
       </div>
       {targetChoice !== undefined && (
@@ -164,12 +218,29 @@ function PlayerZone({ player, assetConfig, targetChoice }: PlayerZoneProps) {
         </div>
       )}
       {player.discards.length > 0 && (
-        <div className="game-discards" role="group" aria-label={`${player.name} public discards`}>
+        <div
+          key={
+            discardMotion !== null && discardMotion !== undefined
+              ? `discards-m${discardMotion.sequence}`
+              : 'discards'
+          }
+          className="game-discards"
+          role="group"
+          aria-label={`${player.name} public discards`}
+          data-motion={discardMotion?.kind}
+          data-motion-sequence={discardMotion?.sequence}
+        >
+          <p className="game-discard-count">
+            {player.discards.length === 1
+              ? '1 card in the pile'
+              : `${player.discards.length} cards in the pile`}
+          </p>
           {player.discards.map((discard, index) => (
             <CardPlaceholder
               key={index}
               card={discard.card}
               assetConfig={assetConfig}
+              originLabel={discardOriginLabel(discard.origin) ?? undefined}
               label={`${discard.card.value} card in ${player.name}'s public discard pile`}
             />
           ))}
@@ -195,6 +266,21 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   const ownHand =
     privateView !== null && privateView.viewerId === viewerId ? privateView.hand : null;
   const busy = state.busy;
+  // M8 card-action motion: the reducer-owned cue state is the only motion
+  // source. The consumer cursor lives in a ref so projection-only renders can
+  // never replay a consumed batch, and each batch resolves to at most one
+  // authoritative destination cue once the projection confirms it.
+  const motionConsumerRef = useRef<MotionConsumerState>(initialMotionConsumerState());
+  const [activeMotion, setActiveMotion] = useState<ActiveMotion | null>(null);
+  useEffect(() => {
+    const { state: consumer, plan } = advanceMotionConsumer(
+      motionConsumerRef.current,
+      game.motionCue,
+      publicView,
+    );
+    motionConsumerRef.current = consumer;
+    setActiveMotion(plan);
+  }, [game.motionCue, publicView]);
   // The only legality source this table ever consults: the viewer's exact
   // authoritative legalActions, screened by the pure selector.
   const controls = evaluateTurnControls(privateView, viewerId);
@@ -348,6 +434,9 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // The actor's own decision is announced by the modal; the third-person pending
   // line would only duplicate it. Non-actors keep the public waiting copy.
   const pending = decisionOpen ? null : pendingPrompt(publicView);
+  // M8: the table-level shuffle cue (HANDS_REDEALT carries no ids, so the
+  // honest cue marks the shared players region, never a single seat).
+  const shuffleMotion = tableShuffleMotion(activeMotion);
   const round = publicView.round;
 
   return (
@@ -415,16 +504,32 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
           </div>
         </section>
 
-        <section className="game-players" aria-label="Players at the table">
+        <section
+          className="game-players"
+          aria-label="Players at the table"
+          data-motion={shuffleMotion?.kind}
+          data-motion-sequence={shuffleMotion?.sequence}
+        >
           <ul className="game-player-list">
-            {publicView.players.map((player) => (
-              <PlayerZone
-                key={player.id}
-                player={player}
-                assetConfig={assetConfig}
-                targetChoice={targetChoiceFor(player.id)}
-              />
-            ))}
+            {publicView.players.map((player) => {
+              const zoneMotion = zoneMotionForPlayer(activeMotion, player.id);
+              return (
+                <PlayerZone
+                  // The zone subtree never remounts for motion: it hosts
+                  // keyboard-focusable target controls. The one-shot cue
+                  // replays by remounting the non-interactive surfaces
+                  // inside (hand backs, discard pile) keyed by sequence.
+                  key={player.id}
+                  player={player}
+                  assetConfig={assetConfig}
+                  targetChoice={targetChoiceFor(player.id)}
+                  zoneMotion={zoneMotion}
+                  handMotion={handMotionForPlayer(activeMotion, player.id)}
+                  discardMotion={discardMotionForPlayer(activeMotion, player.id)}
+                  shuffleSequence={shuffleMotion?.sequence}
+                />
+              );
+            })}
           </ul>
         </section>
 
@@ -531,10 +636,14 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
                 <h3>Revealed hands</h3>
                 <ul className="game-round-result-reveals-list">
                   {resultModel.reveals.map((reveal, index) => (
-                    <li key={`${reveal.playerId}-${index}`}>
+                    <li key={`${reveal.playerId}-${index}-${resultModel.roundNumber ?? 'unknown'}`}>
                       <CardPlaceholder
                         card={reveal.card}
                         assetConfig={assetConfig}
+                        motion={{
+                          kind: 'card-flip',
+                          sequence: resultModel.roundNumber ?? 'unknown',
+                        }}
                         label={`${reveal.name}'s revealed hand: ${cardPresentation(reveal.card).name}, value ${reveal.card.value}`}
                       />
                     </li>

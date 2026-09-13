@@ -14,8 +14,19 @@ import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
 import { createInitialRoomFlowState, type RoomFlowState } from '@/lib/room-flow/reducer';
 import type { GameState } from '@/lib/game/game-reducer';
+import {
+  createInitialMotionCueState,
+  deriveMotionCues,
+  type MotionCueState,
+} from '@/lib/game/motion-cues';
 import type { RoomFlowController } from '@/lib/room-flow/controller';
-import type { CardType, PrivateGameView, PublicGameView } from '@power-hungry-pets/protocol';
+import type {
+  CardType,
+  GamePublicEvent,
+  PrivateGameView,
+  PublicGameView,
+  PublicPlayerView,
+} from '@power-hungry-pets/protocol';
 import {
   matchEndPublicView,
   privateView,
@@ -56,6 +67,7 @@ function flowState(
     matchEnded?: boolean;
     matchWinners?: string[];
     roundResult?: GameState['roundResult'];
+    motionCue?: MotionCueState;
     busy?: RoomFlowState['busy'];
     error?: RoomFlowState['error'];
   } = {},
@@ -75,8 +87,45 @@ function flowState(
       matchWinners: overrides.matchWinners ?? [],
       recentEvents: [],
       roundResult: overrides.roundResult ?? null,
+      motionCue: overrides.motionCue ?? createInitialMotionCueState(),
     },
   };
+}
+
+/** Cue state exactly as the real reducer would hold it after one batch. */
+function motionCueFrom(events: GamePublicEvent[]): MotionCueState {
+  return deriveMotionCues(createInitialMotionCueState(), events);
+}
+
+/** Two-seat view with explicit public discard piles for motion evidence. */
+function viewWithDiscards(
+  selfDiscards: PublicPlayerView['discards'],
+  otherDiscards: PublicPlayerView['discards'] = [],
+): PublicGameView {
+  return publicView({
+    players: [
+      {
+        id: SELF_ID,
+        name: 'Ana',
+        connected: true,
+        eliminated: false,
+        protected: false,
+        victoryTokens: 1,
+        handCount: 1,
+        discards: selfDiscards,
+      },
+      {
+        id: OTHER_ID,
+        name: 'Bruno',
+        connected: true,
+        eliminated: false,
+        protected: false,
+        victoryTokens: 0,
+        handCount: 2,
+        discards: otherDiscards,
+      },
+    ],
+  });
 }
 
 function privateViewWithHand(
@@ -723,6 +772,7 @@ describe('game table target selection (WU7)', () => {
       legalActions?: PrivateGameView['legalActions'];
       publicView?: PublicGameView;
       busy?: RoomFlowState['busy'];
+      motionCue?: MotionCueState;
     } = {},
   ): RoomFlowState {
     const view = overrides.publicView ?? threePlayerView();
@@ -730,6 +780,7 @@ describe('game table target selection (WU7)', () => {
       publicView: view,
       privateView: privateViewWithHand(hand, overrides.legalActions ?? TARGETED_ONLY, view),
       busy: overrides.busy,
+      motionCue: overrides.motionCue,
     });
   }
 
@@ -1036,6 +1087,29 @@ describe('game table target selection (WU7)', () => {
     // The armed controls unmount on cancel; focus returns to the arm button.
     expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toHaveFocus();
   });
+  it('keeps keyboard focus on a live target control while a zone cue changes', async () => {
+    const { rerender } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    const targetButton = screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' });
+    targetButton.focus();
+    expect(document.activeElement).toBe(targetButton);
+
+    // A zone cue addressed to the target's own zone re-renders that zone —
+    // without remounting the subtree that hosts the target control.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={targetedState({
+          motionCue: motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: OTHER_ID }]),
+        })}
+      />,
+    );
+    const stillLive = screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' });
+    expect(stillLive).toBe(targetButton);
+    expect(document.activeElement).toBe(targetButton);
+  });
 });
 
 describe('game table private decision modal (WU8)', () => {
@@ -1253,5 +1327,433 @@ describe('game table private decision modal (WU8)', () => {
     const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
     expect(within(dialog).getByRole('alert')).toHaveTextContent(/The swap could not be sent/i);
     expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+});
+
+describe('game table motion cues (M8)', () => {
+  /** Two-seat public view with explicit face-down hand counts. */
+  function handCountView(self: number, other: number): PublicGameView {
+    return publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 1,
+          handCount: self,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 0,
+          handCount: other,
+          discards: [],
+        },
+      ],
+    });
+  }
+
+  const DRAW_BATCH = motionCueFrom([{ type: 'CARD_DRAWN', playerId: SELF_ID }]);
+  it('marks only the addressed player’s hand zone with the draw-settle cue once the projection confirms the hand change', () => {
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: DRAW_BATCH, publicView: handCountView(1, 2) })}
+      />,
+    );
+    // Event-before-projection: the batch waits; no zone carries motion yet.
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+    // A draw cue never reveals or names a card.
+    expect(screen.queryByText(/instance/i)).toBeNull();
+
+    // The confirming projection: the addressed player's public handCount changed.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: DRAW_BATCH, publicView: handCountView(2, 1) })}
+      />,
+    );
+    const anaHand = screen.getByRole('group', { name: '2 face-down cards' });
+    expect(anaHand).toHaveAttribute('data-motion', 'draw-settle');
+    expect(anaHand).toHaveAttribute('data-motion-sequence', '1');
+    // The other seat stays motionless: no invented attribution.
+    expect(screen.getByRole('group', { name: '1 face-down card' })).not.toHaveAttribute(
+      'data-motion',
+    );
+    // A draw cue never reveals or names a card.
+    expect(screen.queryByText(/instance/i)).toBeNull();
+  });
+
+  it('marks the matching player’s discard destination and pile count with the landing cue', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards([
+            { card: { value: 4, type: 'CAPARAZON_ARMAZON' }, origin: 'PLAYED' },
+          ]),
+          motionCue: motionCueFrom([
+            {
+              type: 'CARD_PLAYED',
+              playerId: SELF_ID,
+              card: { value: 4, type: 'CAPARAZON_ARMAZON' },
+            },
+          ]),
+        })}
+      />,
+    );
+    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    expect(pile).toHaveAttribute('data-motion', 'card-landing');
+    expect(pile).toHaveAttribute('data-motion-sequence', '1');
+    // The pile count is part of the marked surface; the displayed card is the
+    // projection's own public card, not one invented by the cue.
+    expect(pile).toHaveTextContent('1 card in the pile');
+    expect(within(pile).getByText('4')).toBeInTheDocument();
+    expect(within(pile).getByText(/Caparazón Armazón/i)).toBeInTheDocument();
+    // The other seat's pile is untouched.
+    expect(screen.queryByRole('group', { name: 'Bruno public discards' })).toBeNull();
+  });
+
+  it('fires no landing cue when the projection does not confirm the newest discard', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards([]),
+          motionCue: motionCueFrom([
+            { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 10, type: 'REY_GATO' } },
+          ]),
+        })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('applies the one-shot flip to the forced public shell with its origin label', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards([
+            { card: { value: 5, type: 'SERPIENTE_ENCANTADORA' }, origin: 'FORCED_PLAY' },
+          ]),
+          motionCue: motionCueFrom([
+            {
+              type: 'CARD_FORCED_FACE_UP',
+              playerId: SELF_ID,
+              card: { value: 5, type: 'SERPIENTE_ENCANTADORA' },
+            },
+          ]),
+        })}
+      />,
+    );
+    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    expect(pile).toHaveAttribute('data-motion', 'card-flip');
+    expect(within(pile).getByText('Forced face up')).toBeInTheDocument();
+    // Private own-hand cards never receive the public flip treatment.
+    const ownHand = screen.getByRole('region', { name: 'Your hand' });
+    expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
+    expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(1);
+  });
+
+  it('applies the flip to an elimination-reveal shell with its origin label', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards(
+            [],
+            [{ card: { value: 3, type: 'CONEJITO_GUERRILLERO' }, origin: 'ELIMINATION_REVEAL' }],
+          ),
+          motionCue: motionCueFrom([{ type: 'PLAYER_ELIMINATED', playerId: OTHER_ID }]),
+        })}
+      />,
+    );
+    const pile = screen.getByRole('group', { name: 'Bruno public discards' });
+    expect(pile).toHaveAttribute('data-motion', 'card-flip');
+    expect(within(pile).getByText('Revealed by elimination')).toBeInTheDocument();
+  });
+
+  it('keeps origin labels visible without any motion when no cue addresses them', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards(
+            [],
+            [
+              { card: { value: 5, type: 'SERPIENTE_ENCANTADORA' }, origin: 'FORCED_PLAY' },
+              { card: { value: 3, type: 'CONEJITO_GUERRILLERO' }, origin: 'ELIMINATION_REVEAL' },
+            ],
+          ),
+        })}
+      />,
+    );
+    expect(screen.getByText('Forced face up')).toBeInTheDocument();
+    expect(screen.getByText('Revealed by elimination')).toBeInTheDocument();
+    // Projection-only state: labels persist, motion never starts.
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('exchanges hands on exactly the published pair of player zones', () => {
+    const third: PublicPlayerView = {
+      id: 'p-third',
+      name: 'Caro',
+      connected: true,
+      eliminated: false,
+      protected: false,
+      victoryTokens: 0,
+      handCount: 1,
+      discards: [],
+    };
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: publicView({
+            players: [
+              {
+                id: SELF_ID,
+                name: 'Ana',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 1,
+                handCount: 1,
+                discards: [],
+              },
+              {
+                id: OTHER_ID,
+                name: 'Bruno',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 0,
+                handCount: 2,
+                discards: [{ card: { value: 10, type: 'REY_GATO' }, origin: 'PLAYED' }],
+              },
+              third,
+            ],
+          }),
+          motionCue: motionCueFrom([{ type: 'HANDS_SWAPPED', playerIds: [SELF_ID, OTHER_ID] }]),
+        })}
+      />,
+    );
+    const anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
+    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    const caroZone = screen.getByRole('group', { name: 'Caro status' }).closest('li');
+    expect(anaZone).toHaveAttribute('data-motion', 'hand-exchange');
+    expect(brunoZone).toHaveAttribute('data-motion', 'hand-exchange');
+    expect(caroZone).not.toHaveAttribute('data-motion');
+  });
+
+  it('uses an honest table-level shuffle cue with no seat attribution for HANDS_REDEALT', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'HANDS_REDEALT', playerIds: [SELF_ID, OTHER_ID] }]),
+        })}
+      />,
+    );
+    const section = screen.getByRole('region', { name: 'Players at the table' });
+    expect(section).toHaveAttribute('data-motion', 'hand-shuffle');
+    expect(section).toHaveAttribute('data-motion-sequence', '1');
+    // No seat and no hand zone is singled out.
+    expect(container.querySelector('.game-player-zone')).not.toHaveAttribute('data-motion');
+    expect(container.querySelector('.game-opponent-hand')).not.toHaveAttribute('data-motion');
+  });
+
+  it('settles private-effect resolution on the actor zone only', () => {
+    const saqueadogBatch = motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]);
+    // Batches always advance the reducer's sequence; the second cue derives
+    // from the first exactly as the game reducer would hold it.
+    const ratonBatch = deriveMotionCues(saqueadogBatch, [
+      { type: 'RATON_RESOLVED', playerId: OTHER_ID },
+    ]);
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: saqueadogBatch })}
+      />,
+    );
+    let anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
+    let brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    expect(anaZone).toHaveAttribute('data-motion', 'effect-settle');
+    expect(brunoZone).not.toHaveAttribute('data-motion');
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: ratonBatch })}
+      />,
+    );
+    anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
+    brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    expect(anaZone).not.toHaveAttribute('data-motion');
+    expect(brunoZone).toHaveAttribute('data-motion', 'effect-settle');
+  });
+
+  it('clears every cue attribute when an unsupported-only batch arrives', () => {
+    const settleBatch = motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]);
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: settleBatch })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(1);
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: deriveMotionCues(settleBatch, [{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]),
+        })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('stays motionless across a projection-only reconnect-style reset', () => {
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]),
+        })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(1);
+
+    // The game state was cleared and re-projected: motion cues reset with it.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: createInitialMotionCueState() })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('keeps server-gated controls enabled while motion is active', () => {
+    const withDrawControl = {
+      privateView: privateViewWithHand(
+        [{ instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' }],
+        [{ type: 'DRAW_CARD', actorId: SELF_ID }],
+      ),
+    };
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          ...withDrawControl,
+          motionCue: DRAW_BATCH,
+          publicView: handCountView(1, 2),
+        })}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Draw a card' })).toBeEnabled();
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          ...withDrawControl,
+          motionCue: DRAW_BATCH,
+          publicView: handCountView(2, 1),
+        })}
+      />,
+    );
+    expect(screen.getByRole('group', { name: '2 face-down cards' })).toHaveAttribute(
+      'data-motion',
+      'draw-settle',
+    );
+    expect(screen.getByRole('button', { name: 'Draw a card' })).toBeEnabled();
+  });
+
+  it('retriggers one-shot motion by batch identity and holds still otherwise', () => {
+    const secondBatch = deriveMotionCues(DRAW_BATCH, [{ type: 'CARD_DRAWN', playerId: SELF_ID }]);
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: DRAW_BATCH, publicView: handCountView(1, 2) })}
+      />,
+    );
+    // Event-before-projection: the first draw batch waits for confirmation.
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: DRAW_BATCH, publicView: handCountView(2, 1) })}
+      />,
+    );
+    const firstNode = container.querySelector('[data-motion="draw-settle"]');
+    expect(firstNode).toHaveAttribute('data-motion-sequence', '1');
+
+    // A second draw batch is captured against the current projection and waits
+    // for its own confirming hand change.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: secondBatch, publicView: handCountView(2, 1) })}
+      />,
+    );
+    expect(container.querySelector('[data-motion="draw-settle"]')).toBe(firstNode);
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: secondBatch, publicView: handCountView(3, 1) })}
+      />,
+    );
+    const secondNode = container.querySelector('[data-motion="draw-settle"]');
+    expect(secondNode).not.toBe(firstNode);
+    expect(secondNode).toHaveAttribute('data-motion-sequence', '2');
+
+    // Re-rendering the same batch identity and projection-only updates never
+    // remount the animated surface.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: secondBatch,
+          publicView: publicView({
+            round: roundView({ roundNumber: 1 }),
+            players: [
+              {
+                id: SELF_ID,
+                name: 'Ana',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 2,
+                handCount: 3,
+                discards: [],
+              },
+              {
+                id: OTHER_ID,
+                name: 'Bruno',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 0,
+                handCount: 1,
+                discards: [],
+              },
+            ],
+          }),
+        })}
+      />,
+    );
+    expect(container.querySelector('[data-motion="draw-settle"]')).toBe(secondNode);
   });
 });

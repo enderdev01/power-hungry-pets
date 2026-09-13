@@ -836,6 +836,129 @@ body {
   color: var(--paper-faded);
 }
 
+/* M8 card-action motion: one-shot destination cues derived only from the
+   reducer-owned motion cues plus the authoritative projection. Transform
+   and opacity only — never layout — 180–320ms, no loops, and the resting
+   state equals the animated end state, so reduced-motion removal changes
+   nothing but the movement. Controls never live on an animated surface:
+   zone-level cues animate the zone's non-interactive hand surface only, and
+   one-shot replays remount only keyed non-interactive surfaces. */
+
+@keyframes motion-draw-settle {
+  from {
+    opacity: 0.35;
+    transform: translateY(-0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-card-landing {
+  from {
+    opacity: 0.4;
+    transform: translateY(-0.6rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-card-flip {
+  from {
+    transform: rotateY(90deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes motion-hand-shuffle {
+  from {
+    opacity: 0.55;
+    transform: translateY(0.2rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-hand-exchange {
+  from {
+    opacity: 0.55;
+    transform: translateY(0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-effect-settle {
+  from {
+    transform: translateY(0.25rem);
+  }
+  to {
+    transform: none;
+  }
+}
+
+.game-opponent-hand[data-motion='draw-settle'] {
+  animation: motion-draw-settle 240ms ease-out;
+}
+
+/* The landing/flip targets the newest public shell of the marked pile; the
+   pile-count paragraph is a different element type, so :last-of-type is
+   exactly the newest card. */
+.game-discards[data-motion='card-landing'] .game-card-placeholder:last-of-type {
+  animation: motion-card-landing 280ms ease-out;
+}
+
+.game-discards[data-motion='card-flip'] .game-card-placeholder:last-of-type {
+  animation: motion-card-flip 220ms ease-out;
+}
+
+/* The round-result slip's reveal shells sit outside any discard pile, so the
+   flip must reach them directly on the marked shell itself. */
+.game-round-result-reveals-list .game-card-placeholder[data-motion='card-flip'] {
+  animation: motion-card-flip 220ms ease-out;
+}
+
+.game-players[data-motion='hand-shuffle'] .game-card-placeholder-back {
+  animation: motion-hand-shuffle 320ms ease-out;
+}
+
+/* Zone-level cues are attributed on the zone but animate only its
+   non-interactive hand surface: the zone subtree hosts keyboard-focusable
+   target controls, so it never remounts and never animates as a whole. */
+.game-player-zone[data-motion='hand-exchange'] .game-opponent-hand {
+  animation: motion-hand-exchange 300ms ease-out;
+}
+
+.game-player-zone[data-motion='effect-settle'] .game-opponent-hand {
+  animation: motion-effect-settle 200ms ease-out;
+}
+
+/* Textual origin stamps on public discard shells: static copy that persists
+   with or without motion, in the system's tag voice. */
+.game-card-origin {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--paper-ink);
+}
+
+.game-discard-count {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 46rem) {
   .game-center,
   .game-player-list {
@@ -881,5 +1004,14 @@ body {
      and throw the absolutely-positioned slip off-center. */
   .game-round-result {
     transform: translate(-50%, -50%);
+  }
+
+  /* M8: every motion cue hook collapses to its final state. The resting state
+     already equals the animated end state, so only the movement is removed —
+     final states and textual labels are fully preserved. */
+  [data-motion],
+  [data-motion] .game-card-placeholder {
+    animation: none !important;
+    transform: none !important;
   }
 }

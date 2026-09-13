@@ -35,18 +35,33 @@ export type MotionCue =
 
 /**
  * Reducer-owned motion-cue state: a monotonic sequence that advances exactly
- * once per accepted cue-bearing batch, plus a bounded list of recent cues.
+ * once per accepted cue-bearing batch, a bounded list of recent cues, and the
+ * newest batch's own cues. Consumers identify the newest batch by the monotonic
+ * sequence — never by the bounded array's length — so motion survives the log
+ * saturating.
  */
 export interface MotionCueState {
   /** Monotonic batch counter; 0 until the first cue-bearing batch. */
   sequence: number;
   /** Recent cues in arrival order; oldest dropped once the bound is exceeded. */
   cues: MotionCue[];
+  /**
+   * The cues of the most recent cue-bearing batch, stamped with the sequence it
+   * advanced to. `null` until the first cue-bearing batch; a batch without a
+   * supported cue leaves it unchanged.
+   */
+  lastBatch: MotionCueBatch | null;
+}
+
+/** The cues of exactly one accepted batch, stamped with its own sequence. */
+export interface MotionCueBatch {
+  sequence: number;
+  cues: MotionCue[];
 }
 
 /** Truthful starting state: no motion has been announced yet. */
 export function createInitialMotionCueState(): MotionCueState {
-  return { sequence: 0, cues: [] };
+  return { sequence: 0, cues: [], lastBatch: null };
 }
 
 /** The canonical protocol card-type domain; anything outside it is fail-closed. */
@@ -147,7 +162,7 @@ function toCue(event: unknown): MotionCue | null {
   }
 }
 
-function isMotionCueState(value: unknown): value is MotionCueState {
+function isMotionCueBatch(value: unknown): value is MotionCueBatch {
   return (
     isPlainObject(value) &&
     typeof value.sequence === 'number' &&
@@ -156,10 +171,21 @@ function isMotionCueState(value: unknown): value is MotionCueState {
   );
 }
 
+function isMotionCueState(value: unknown): value is MotionCueState {
+  return (
+    isPlainObject(value) &&
+    typeof value.sequence === 'number' &&
+    Number.isFinite(value.sequence) &&
+    Array.isArray(value.cues) &&
+    (value.lastBatch == null || isMotionCueBatch(value.lastBatch))
+  );
+}
+
 /**
  * The game reducer's motion-cue transition for one atomic `game/events` batch:
  * the sequence advances exactly once when the batch carries at least one
- * supported cue, and the bounded cue list absorbs the new cues. A batch with
+ * supported cue, the bounded cue list absorbs the new cues, and the newest
+ * batch's own cues are stamped with the sequence they advanced to. A batch with
  * no supported cue (unsupported-only, empty, or malformed) returns the
  * previous state unchanged so no false motion is announced. Never throws.
  */
@@ -178,8 +204,13 @@ export function deriveMotionCues(prev: MotionCueState, events: GamePublicEvent[]
   if (cues.length === 0) {
     return base;
   }
+  const sequence = base.sequence + 1;
   return {
-    sequence: base.sequence + 1,
+    sequence,
     cues: [...base.cues, ...cues].slice(-MOTION_CUE_LOG_LIMIT),
+    // The batch snapshot is stamped with its own sequence so consumers can
+    // always resolve the newest batch by sequence, even after the bounded
+    // log saturates and starts dropping old entries.
+    lastBatch: { sequence, cues },
   };
 }

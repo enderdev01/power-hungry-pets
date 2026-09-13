@@ -13,8 +13,8 @@ import {
 import type { GamePublicEvent } from '@power-hungry-pets/protocol';
 
 describe('motion cue derivation', () => {
-  it('starts truthful: sequence 0 and no cues', () => {
-    expect(createInitialMotionCueState()).toEqual({ sequence: 0, cues: [] });
+  it('starts truthful: sequence 0, no cues, and no batch snapshot', () => {
+    expect(createInitialMotionCueState()).toEqual({ sequence: 0, cues: [], lastBatch: null });
   });
 
   it('derives typed public cues from a supported batch in event order', () => {
@@ -76,6 +76,7 @@ describe('motion cue derivation', () => {
     const prev: MotionCueState = {
       sequence: 4,
       cues: [{ kind: 'card-drawn', playerId: 'p-self' }],
+      lastBatch: { sequence: 4, cues: [{ kind: 'card-drawn', playerId: 'p-self' }] },
     };
     const unsupportedOnly: GamePublicEvent[] = [
       { type: 'PECERA_GUESS_RESOLVED', actorId: 'a', targetId: 'b', correct: true },
@@ -88,7 +89,11 @@ describe('motion cue derivation', () => {
   });
 
   it('treats an empty batch as no motion and keeps the previous state', () => {
-    const prev: MotionCueState = { sequence: 2, cues: [{ kind: 'token-awarded', playerId: 'a' }] };
+    const prev: MotionCueState = {
+      sequence: 2,
+      cues: [{ kind: 'token-awarded', playerId: 'a' }],
+      lastBatch: { sequence: 2, cues: [{ kind: 'token-awarded', playerId: 'a' }] },
+    };
     expect(deriveMotionCues(prev, [])).toBe(prev);
   });
 
@@ -159,5 +164,60 @@ describe('motion cue derivation', () => {
     const next = deriveMotionCues(malformed, [{ type: 'CARD_DRAWN', playerId: 'a' }]);
     expect(next.sequence).toBe(1);
     expect(next.cues).toEqual([{ kind: 'card-drawn', playerId: 'a' }]);
+    expect(next.lastBatch).toEqual({ sequence: 1, cues: [{ kind: 'card-drawn', playerId: 'a' }] });
+  });
+
+  it('fails closed on a malformed previous batch snapshot instead of trusting it', () => {
+    const malformed = {
+      sequence: 3,
+      cues: [],
+      lastBatch: { sequence: 'nope', cues: 'nope' },
+    } as unknown as MotionCueState;
+    const next = deriveMotionCues(malformed, [{ type: 'CARD_DRAWN', playerId: 'a' }]);
+    expect(next.sequence).toBe(1);
+    expect(next.lastBatch).toEqual({ sequence: 1, cues: [{ kind: 'card-drawn', playerId: 'a' }] });
+  });
+
+  it('stamps the newest batch snapshot with the sequence it advanced to', () => {
+    let state = createInitialMotionCueState();
+    state = deriveMotionCues(state, [{ type: 'CARD_DRAWN', playerId: 'a' }]);
+    expect(state.lastBatch).toEqual({ sequence: 1, cues: [{ kind: 'card-drawn', playerId: 'a' }] });
+
+    const second = deriveMotionCues(state, [
+      { type: 'CARD_PLAYED', playerId: 'b', card: { value: 10, type: 'REY_GATO' } },
+      { type: 'TOKEN_AWARDED', playerId: 'c' },
+    ]);
+    expect(second.sequence).toBe(2);
+    expect(second.lastBatch).toEqual({
+      sequence: 2,
+      cues: [
+        { kind: 'card-played', playerId: 'b', card: { value: 10, type: 'REY_GATO' } },
+        { kind: 'token-awarded', playerId: 'c' },
+      ],
+    });
+
+    // An unsupported-only batch leaves the snapshot unchanged.
+    expect(deriveMotionCues(second, [{ type: 'ROUND_ENDED', winnerIds: ['a'] }])).toBe(second);
+  });
+
+  it('keeps the newest batch resolvable by sequence after the cue log saturates', () => {
+    let state = createInitialMotionCueState();
+    for (let i = 0; i < MOTION_CUE_LOG_LIMIT; i += 1) {
+      state = deriveMotionCues(state, [{ type: 'CARD_DRAWN', playerId: `p-${i}` }]);
+    }
+    expect(state.cues).toHaveLength(MOTION_CUE_LOG_LIMIT);
+
+    // Batch 21 crosses the bound: the bounded log drops its oldest entry, but
+    // the newest batch stays fully resolvable by its own sequence stamp.
+    const crossed = deriveMotionCues(state, [
+      { type: 'CARD_PLAYED', playerId: 'late', card: { value: 10, type: 'REY_GATO' } },
+    ]);
+    expect(crossed.sequence).toBe(MOTION_CUE_LOG_LIMIT + 1);
+    expect(crossed.cues).toHaveLength(MOTION_CUE_LOG_LIMIT);
+    expect(crossed.cues[0]).toEqual({ kind: 'card-drawn', playerId: 'p-1' });
+    expect(crossed.lastBatch).toEqual({
+      sequence: MOTION_CUE_LOG_LIMIT + 1,
+      cues: [{ kind: 'card-played', playerId: 'late', card: { value: 10, type: 'REY_GATO' } }],
+    });
   });
 });

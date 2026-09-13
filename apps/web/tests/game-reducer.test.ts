@@ -227,6 +227,7 @@ describe('motion cue seam (M8 WU1)', () => {
     expect(next.motionCue).toEqual({
       sequence: 1,
       cues: [{ kind: 'card-drawn', playerId: 'p-self' }],
+      lastBatch: { sequence: 1, cues: [{ kind: 'card-drawn', playerId: 'p-self' }] },
     });
   });
 
@@ -279,7 +280,25 @@ describe('motion cue seam (M8 WU1)', () => {
       events: [{ type: 'CARD_DRAWN', playerId: 'p-self' }],
     });
     state = gameReducer(state, { type: 'game/cleared' });
-    expect(state.motionCue).toEqual({ sequence: 0, cues: [] });
+    expect(state.motionCue).toEqual({ sequence: 0, cues: [], lastBatch: null });
+  });
+
+  it('keeps the newest batch resolvable by sequence after the cue log saturates', () => {
+    let state = createInitialGameState();
+    for (let i = 0; i < 25; i += 1) {
+      state = gameReducer(state, {
+        type: 'game/events',
+        events: [{ type: 'CARD_DRAWN', playerId: `p-${i}` }],
+      });
+    }
+    // The bounded cue log saturates, but the newest batch stays stamped with
+    // its own sequence so consumers can resolve it by sequence, not by length.
+    expect(state.motionCue.sequence).toBe(25);
+    expect(state.motionCue.cues).toHaveLength(20);
+    expect(state.motionCue.lastBatch).toEqual({
+      sequence: 25,
+      cues: [{ kind: 'card-drawn', playerId: 'p-24' }],
+    });
   });
 });
 

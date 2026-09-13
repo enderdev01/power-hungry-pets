@@ -6,6 +6,8 @@
  * no game command; a later ROUND_ENDED batch re-arms it; room/game clear
  * resets it.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
@@ -24,6 +26,8 @@ import {
   roundView,
   SELF_ID,
 } from './helpers/game-views';
+
+const motionCss = readFileSync(join(__dirname, '..', 'src', 'app', 'globals.css'), 'utf8');
 
 /** Records every game command; the slip must never send any of them. */
 function controllerStub() {
@@ -519,5 +523,111 @@ describe('round result slip presentation (WU9)', () => {
       <GameTable controller={controllerStub() as RoomFlowController} state={stateWithGame(game)} />,
     );
     expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+  });
+});
+
+describe('round result reveal motion (M8)', () => {
+  const EXHAUSTION: GamePublicEvent[] = [
+    {
+      type: 'HANDS_REVEALED',
+      hands: [
+        { playerId: SELF_ID, card: { value: 0, type: 'ROBOT_ASPIRADOR_REAL' } },
+        { playerId: OTHER_ID, card: { value: 5, type: 'SERPIENTE_ENCANTADORA' } },
+      ],
+    },
+    { type: 'ROUND_ENDED', winnerIds: [SELF_ID] },
+  ];
+
+  it('applies the one-shot flip to the already-public reveal shells with the round as sequence', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={capturedState(EXHAUSTION)}
+      />,
+    );
+    const slip = screen.getByRole('status', { name: 'Round result' });
+    const flips = container.querySelectorAll('[data-motion="card-flip"]');
+    expect(flips).toHaveLength(2);
+    for (const shell of flips) {
+      expect(shell).toHaveAttribute('data-motion-sequence', '1');
+      expect(slip).toContainElement(shell);
+    }
+  });
+
+  it('the stylesheet’s card-flip rule actually reaches the rendered reveal shells', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={capturedState(EXHAUSTION)}
+      />,
+    );
+    const shells = container.querySelectorAll('[data-motion="card-flip"]');
+    expect(shells).toHaveLength(2);
+
+    // Selector-reach contract: parse every stylesheet rule carrying the flip
+    // animation and require one whose selector matches the rendered reveal
+    // shells. Attribute presence alone never proves the animation starts —
+    // a rule scoped to a surface the slip never renders would be dead CSS.
+    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((match) => ({ selector: match[1].trim(), body: match[2] }))
+      .filter(
+        (rule) => rule.selector.includes('card-flip') && rule.body.includes('motion-card-flip'),
+      );
+    const reaching = rules.filter((rule) =>
+      [...container.querySelectorAll(rule.selector)].some(
+        (node) =>
+          node.classList.contains('game-card-placeholder') &&
+          node.closest('.game-round-result-reveals-list') !== null,
+      ),
+    );
+    expect(reaching).toHaveLength(1);
+  });
+
+  it("retriggers the reveal flip by the new round's batch identity after a dismissal", async () => {
+    const controller = controllerStub() as RoomFlowController;
+    const { container, rerender } = render(
+      <GameTable controller={controller} state={capturedState(EXHAUSTION)} />,
+    );
+    const firstNode = container.querySelector('[data-motion="card-flip"]');
+    expect(firstNode).toHaveAttribute('data-motion-sequence', '1');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+
+    // Round 2 ends: a fresh capture re-arms the slip and the flip replays with
+    // the new round's identity — never a timer.
+    rerender(
+      <GameTable controller={controller} state={capturedState(EXHAUSTION, laterRoundView())} />,
+    );
+    const secondNode = container.querySelector('[data-motion="card-flip"]');
+    expect(secondNode).not.toBe(firstNode);
+    expect(secondNode).toHaveAttribute('data-motion-sequence', '2');
+  });
+
+  it('never moves the reveal flip onto private own-hand shells', () => {
+    const drawView = publicView({
+      round: roundView({ currentPlayerId: SELF_ID, phase: 'DRAW_REQUIRED' }),
+    });
+    const withHand = gameReducer(liveGame(drawView), {
+      type: 'game/private-state',
+      privateView: privateView(
+        SELF_ID,
+        [{ instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' }],
+        [],
+        drawView,
+      ),
+    });
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={stateWithGame(gameAfterEvents(EXHAUSTION, withHand))}
+      />,
+    );
+    // The slip's public reveal shells flip; the viewer's own hand never does.
+    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(2);
+    const ownHand = screen.getByRole('region', { name: 'Your hand' });
+    expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
+    expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
   });
 });
