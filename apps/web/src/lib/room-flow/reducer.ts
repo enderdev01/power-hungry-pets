@@ -29,7 +29,7 @@ export interface SeatIdentity {
 }
 
 /** Action kinds this tab can attempt (and retry after a failure). */
-export type AttemptAction = 'create' | 'join' | 'rebind' | 'start' | 'leave';
+export type AttemptAction = 'create' | 'join' | 'rebind' | 'start' | 'leave' | 'draw' | 'play';
 
 /** What the player should do next after a failed attempt. */
 export type ErrorRecovery = 'retry' | 'edit-input' | 'rejoin' | 'none';
@@ -39,6 +39,8 @@ export interface Attempt {
   action: AttemptAction;
   code?: string;
   displayName?: string;
+  /** Exact card instance id for a retried targetless play command. */
+  cardInstanceId?: string;
 }
 
 /** A typed, human-facing server failure. */

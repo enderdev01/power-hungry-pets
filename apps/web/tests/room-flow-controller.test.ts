@@ -9,7 +9,7 @@ import {
   type MembershipAck,
   type RoomFlowGateway,
 } from '@/lib/room-flow/controller';
-import type { RoomSnapshot } from '@power-hungry-pets/protocol';
+import type { RoomSnapshot, TurnCommand } from '@power-hungry-pets/protocol';
 
 function ackOf(
   code: string,
@@ -98,6 +98,11 @@ class FakeGateway implements RoomFlowGateway {
     const next = this.leaveQueue.shift();
     if (!next) throw new Error('no scripted room:leave result');
     return next();
+  }
+
+  sendGameCommand(input: { code: string; command: TurnCommand }): Promise<never> {
+    this.calls.push({ kind: 'game:command', input });
+    return Promise.reject(new Error('not scripted'));
   }
 
   onRoomUpdated(cb: (room: RoomSnapshot) => void): () => void {

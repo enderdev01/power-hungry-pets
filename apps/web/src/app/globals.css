@@ -530,6 +530,30 @@ body {
   text-align: center;
 }
 
+/* WU6 server-gated turn controls. Coral is status-only: the error slip is
+   the one alarm surface on the table, with the sentence carrying the words. */
+
+.game-error {
+  background: var(--game-placeholder-surface);
+  color: var(--game-danger-accent);
+  border: 2px solid var(--coral);
+  padding: 1rem;
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
+.game-error-sentence {
+  margin: 0;
+  font-weight: 700;
+}
+
+.game-hand-entry {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
 @media (max-width: 46rem) {
   .game-center,
   .game-player-list {

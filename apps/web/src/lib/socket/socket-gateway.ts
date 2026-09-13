@@ -17,10 +17,12 @@ import {
   type RoomSnapshot,
   type RoomStartData,
   type SystemPingData,
+  type TurnCommand,
 } from '@power-hungry-pets/protocol';
 import type {
   ConnectionEvent,
   CreateMembershipAck,
+  GameCommandAck,
   JoinMembershipAck,
   LeaveRoomAck,
   RoomFlowGateway,
@@ -163,6 +165,11 @@ export class SocketRoomFlowGateway implements RoomFlowGateway {
 
   leaveRoom(input: { code: string }): Promise<LeaveRoomAck> {
     return this.request<RoomLeaveData>(ClientEvents.roomLeave, input);
+  }
+
+  /** Sends one exact engine turn command for the seated room. */
+  sendGameCommand(input: { code: string; command: TurnCommand }): Promise<GameCommandAck> {
+    return this.request<GameCommandAck>(ClientEvents.gameCommand, input);
   }
 
   /** Keeps the transport warm with the retained ping seam. */

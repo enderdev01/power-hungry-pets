@@ -14,6 +14,7 @@ import type {
   MatchEndedBroadcast,
   PublicGameView,
   RoomSnapshot,
+  TurnCommand,
 } from '@power-hungry-pets/protocol';
 import {
   createInitialRoomFlowState,
@@ -49,6 +50,21 @@ export interface StartMatchAck {
   publicView?: PublicGameView;
 }
 
+/**
+ * Client-safe mirror of a successful `game:command` acknowledgement. The
+ * server keeps authority: broadcasts, never this payload, update game state.
+ */
+export interface GameCommandAck {
+  /** Sanitized public events emitted by the command, in emission order. */
+  events: import('@power-hungry-pets/protocol').GamePublicEvent[];
+  /** True when the command ended a round and a new round was auto-set-up. */
+  roundAdvanced: boolean;
+  /** True when the command ended the whole match. */
+  matchEnded: boolean;
+  /** Fresh public view after the command. */
+  publicView: PublicGameView;
+}
+
 export interface LeaveRoomAck {
   room: RoomSnapshot | null;
 }
@@ -66,6 +82,7 @@ export interface RoomFlowGateway {
     reconnectToken?: string;
   }): Promise<JoinMembershipAck>;
   startMatch(input: { code: string }): Promise<StartMatchAck>;
+  sendGameCommand(input: { code: string; command: TurnCommand }): Promise<GameCommandAck>;
   leaveRoom(input: { code: string }): Promise<LeaveRoomAck>;
   onRoomUpdated(callback: (room: RoomSnapshot) => void): () => void;
   onConnectionChange(callback: (status: ConnectionEvent) => void): () => void;
@@ -163,6 +180,10 @@ export interface RoomFlowController {
   restoreSeatWithToken(code: string, token: string): Promise<RestoreOutcome>;
   /** Starts the match for the room this tab is seated in. */
   startMatch(): Promise<boolean>;
+  /** Sends this viewer's authoritative `DRAW_CARD` command. */
+  drawCard(): Promise<boolean>;
+  /** Sends the exact targetless `PLAY_CARD` command for one hand card. */
+  playCard(cardInstanceId: string): Promise<boolean>;
   /** Leaves the room this tab is seated in and clears its storage. */
   leaveRoom(): Promise<boolean>;
   /** Replays the pending attempt after a recoverable failure. */
@@ -342,6 +363,45 @@ export function createRoomFlowController(
     return pending;
   }
 
+  function sendCommand(
+    command: TurnCommand,
+    action: 'draw' | 'play',
+    cardInstanceId?: string,
+  ): Promise<boolean> {
+    const code = state.roomCode;
+    const actorId = state.self?.playerId;
+    const intentRevision = roomIntentRevision;
+    if (code === null || actorId === undefined) {
+      return Promise.resolve(false);
+    }
+    const attempt: Attempt = {
+      action,
+      code,
+      ...(cardInstanceId !== undefined ? { cardInstanceId } : {}),
+    };
+    dispatch({ type: 'busy/started', action });
+    return (async () => {
+      try {
+        // The exact canonical command, byte-for-byte what the server expects:
+        // no client-side legality, no normalization, no optimistic mutation.
+        await gateway.sendGameCommand({ code, command });
+        if (intentRevision !== roomIntentRevision || state.roomCode !== code) {
+          return false;
+        }
+        dispatch({ type: 'busy/cleared' });
+        dispatch({ type: 'error/cleared' });
+        return true;
+      } catch (error) {
+        if (intentRevision !== roomIntentRevision || state.roomCode !== code) {
+          return false;
+        }
+        const ackError = asAckError(error);
+        fail(attempt, ackError.code, ackError.message);
+        return false;
+      }
+    })();
+  }
+
   const controller: RoomFlowController = {
     getState: () => state,
     subscribe(listener) {
@@ -475,6 +535,22 @@ export function createRoomFlowController(
       }
     },
 
+    async drawCard(): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand({ type: 'DRAW_CARD', actorId }, 'draw');
+    },
+
+    async playCard(cardInstanceId: string): Promise<boolean> {
+      const actorId = state.self?.playerId;
+      if (actorId === undefined) {
+        return false;
+      }
+      return sendCommand({ type: 'PLAY_CARD', actorId, cardInstanceId }, 'play', cardInstanceId);
+    },
+
     async leaveRoom() {
       const code = state.roomCode;
       if (code === null) {
@@ -517,6 +593,10 @@ export function createRoomFlowController(
           return controller.startMatch();
         case 'leave':
           return controller.leaveRoom();
+        case 'draw':
+          return controller.drawCard();
+        case 'play':
+          return controller.playCard(attempt.cardInstanceId ?? '');
       }
     },
 

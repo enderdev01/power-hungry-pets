@@ -32,7 +32,7 @@ export default function RoomPage() {
           Switching rooms — clearing the previous table.
         </section>
       ) : state.room?.status === 'IN_MATCH' ? (
-        <GameTable state={state} />
+        <GameTable controller={controller} state={state} />
       ) : (
         <Lobby
           code={code}

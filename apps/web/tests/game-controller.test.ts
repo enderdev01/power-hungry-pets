@@ -2,12 +2,14 @@
  * Game-flow controller contract: the room-flow controller must capture the
  * initial public view from the room:start acknowledgement, subscribe to the
  * game broadcasts through the injected gateway seam, ignore private state
- * addressed to a different seat or an unseated tab, and ignore game payloads
- * for a different room code.
+ * addressed to a different seat or an unseated tab, ignore game payloads for a
+ * different room code, and send exact server-authoritative game commands (WU6)
+ * without ever mutating game state locally.
  */
 import {
   createMemoryStores,
   createRoomFlowController,
+  type GameCommandAck,
   type RoomFlowController,
 } from '@/lib/room-flow/controller';
 import type { RoomFlowState } from '@/lib/room-flow/reducer';
@@ -18,6 +20,7 @@ import type {
   MatchEndedBroadcast,
   PublicGameView,
   RoomSnapshot,
+  TurnCommand,
 } from '@power-hungry-pets/protocol';
 import {
   privateView,
@@ -26,6 +29,15 @@ import {
   SELF_ID,
   OTHER_ID,
 } from './helpers/game-views';
+
+function commandAck(): GameCommandAck {
+  return { events: [], roundAdvanced: false, matchEnded: false, publicView: publicView() };
+}
+
+/** Rejection shaped like the socket adapter's typed ack error. */
+function ackError(code: string, message: string): Error & { code: string } {
+  return Object.assign(new Error(message), { name: 'GatewayAckError', code });
+}
 
 /** Scriptable fake over the full room-flow gateway seam. */
 class FakeGateway {
@@ -36,6 +48,8 @@ class FakeGateway {
   gameEventCbs: Array<(payload: GameEventBroadcast) => void> = [];
   matchEndedCbs: Array<(payload: MatchEndedBroadcast) => void> = [];
   startQueue: Array<() => Promise<{ room: RoomSnapshot; publicView: PublicGameView }>> = [];
+  commandQueue: Array<() => Promise<GameCommandAck>> = [];
+  commandResults: Array<GameCommandAck & { input: { code: string; command: TurnCommand } }> = [];
 
   connect(): void {
     for (const cb of [...this.connectionCbs]) cb('connected');
@@ -59,6 +73,13 @@ class FakeGateway {
 
   leaveRoom(): Promise<{ room: RoomSnapshot | null }> {
     return Promise.resolve({ room: null });
+  }
+
+  sendGameCommand(input: { code: string; command: TurnCommand }): Promise<GameCommandAck> {
+    this.commandResults.push({ ...commandAck(), input });
+    const next = this.commandQueue.shift();
+    if (!next) throw new Error('no scripted game:command result');
+    return next();
   }
 
   onRoomUpdated(cb: (room: RoomSnapshot) => void): () => void {
@@ -243,5 +264,146 @@ describe('game-flow controller', () => {
     expect(f.state().game.matchEnded).toBe(true);
     expect(f.state().game.matchWinners).toEqual([SELF_ID]);
     expect(f.state().room?.status).toBe('FINISHED');
+  });
+});
+
+describe('game commands (WU6)', () => {
+  it('sends the exact DRAW_CARD command for this seat and clears busy on success', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.drawCard();
+
+    expect(ok).toBe(true);
+    expect(f.gateway.commandResults[0]).toMatchObject({
+      input: {
+        code: 'ABC12',
+        command: { type: 'DRAW_CARD', actorId: SELF_ID },
+      },
+    });
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('sends the exact targetless PLAY_CARD command tied to the card instance id', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    const ok = await f.controller.playCard('own-instance-1');
+
+    expect(ok).toBe(true);
+    expect(f.gateway.commandResults[0]).toMatchObject({
+      input: {
+        code: 'ABC12',
+        command: { type: 'PLAY_CARD', actorId: SELF_ID, cardInstanceId: 'own-instance-1' },
+      },
+    });
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('never mutates game state from the acknowledgement — broadcasts stay the only source', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+
+    await f.controller.drawCard();
+
+    // The untouched initial projection proves no optimistic or ack-fed mutation.
+    expect(f.state().game.publicView).toBeNull();
+    expect(f.state().game.privateView).toBeNull();
+  });
+
+  it('sends no command while this tab is unseated', async () => {
+    const f = fixture();
+
+    expect(await f.controller.drawCard()).toBe(false);
+    expect(await f.controller.playCard('own-instance-1')).toBe(false);
+    expect(f.gateway.commandResults).toHaveLength(0);
+    expect(f.state().busy).toBeNull();
+  });
+
+  it('surfaces a typed engine rejection and leaves a retryable draw attempt', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    const ok = await f.controller.drawCard();
+
+    expect(ok).toBe(false);
+    expect(f.state().busy).toBeNull();
+    expect(f.state().error?.code).toBe('ENGINE_REJECTED');
+    expect(f.state().pendingAttempt).toEqual({ action: 'draw', code: 'ABC12' });
+  });
+
+  it('keeps the exact card instance in a retryable play failure', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'not legal now')));
+
+    expect(await f.controller.playCard('own-instance-2')).toBe(false);
+    expect(f.state().pendingAttempt).toEqual({
+      action: 'play',
+      code: 'ABC12',
+      cardInstanceId: 'own-instance-2',
+    });
+  });
+
+  it('retries a failed draw through the pending attempt', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('INTERNAL_ERROR', 'boom')));
+    await f.controller.drawCard();
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    expect(await f.controller.retry()).toBe(true);
+    expect(f.gateway.commandResults[1]).toMatchObject({
+      input: { command: { type: 'DRAW_CARD', actorId: SELF_ID } },
+    });
+  });
+
+  it('retries a failed play with the same exact card instance id', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('INTERNAL_ERROR', 'boom')));
+    await f.controller.playCard('own-instance-2');
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    expect(await f.controller.retry()).toBe(true);
+    expect(f.gateway.commandResults[1]).toMatchObject({
+      input: { command: { type: 'PLAY_CARD', actorId: SELF_ID, cardInstanceId: 'own-instance-2' } },
+    });
+  });
+
+  it('ignores a late game-command acknowledgement after navigation', async () => {
+    const f = fixture();
+    await f.seat();
+    let resolveCommand!: (value: GameCommandAck) => void;
+    f.gateway.commandQueue.push(
+      () =>
+        new Promise<GameCommandAck>((resolve) => {
+          resolveCommand = resolve;
+        }),
+    );
+    const drawing = f.controller.drawCard();
+    f.controller.enterRoom('ZZZZ9');
+    resolveCommand(commandAck());
+
+    expect(await drawing).toBe(false);
+    expect(f.state().roomCode).toBeNull();
+    expect(f.state().busy).toBeNull();
+    expect(f.state().game.publicView).toBeNull();
+  });
+
+  it('clears a stale error once a later command succeeds', async () => {
+    const f = fixture();
+    await f.seat();
+    f.gateway.commandQueue.push(() => Promise.reject(ackError('ENGINE_REJECTED', 'no')));
+    await f.controller.drawCard();
+    expect(f.state().error).not.toBeNull();
+
+    f.gateway.commandQueue.push(() => Promise.resolve(commandAck()));
+    await f.controller.drawCard();
+    expect(f.state().error).toBeNull();
   });
 });
