@@ -24,17 +24,22 @@ import {
   type RoundResultModel,
 } from '@/lib/game/round-result';
 import { evaluateTurnControls } from '@/lib/game/turn-controls';
+import { PlayerTokenRack, tokenLabel } from '@/components/game/player-token-rack';
 import {
   advanceMotionConsumer,
   discardMotionForPlayer,
   discardOriginLabel,
   handMotionForPlayer,
   initialMotionConsumerState,
+  protectionMotionForPlayer,
   tableShuffleMotion,
+  tokenMotionForPlayer,
   zoneMotionForPlayer,
   type ActiveMotion,
   type DiscardMotion,
   type MotionConsumerState,
+  type StatusMotionKind,
+  type StatusPlan,
   type ZoneMotion,
 } from '@/lib/game/presentation-motion';
 import type { RoomFlowController } from '@/lib/room-flow/room-flow';
@@ -47,10 +52,6 @@ function playerNameById(view: PublicGameView, playerId: string): string | null {
 
 function handCountLabel(count: number): string {
   return count === 1 ? '1 face-down card' : `${count} face-down cards`;
-}
-
-function tokenLabel(count: number): string {
-  return count === 1 ? '1 victory token' : `${count} victory tokens`;
 }
 
 /** "Ana and Bruno" / "Ana, Bruno and Caro" for shared-win wording. */
@@ -150,6 +151,17 @@ interface PlayerZoneProps {
    * backs so the gather replays once per batch without touching the controls.
    */
   shuffleSequence?: number;
+  /**
+   * M8 one-shot status cues for this player's persistent states, resolved by
+   * the presentation-motion seam. The protection cue (settle or expiry) mounts
+   * a keyed non-interactive pulse layer on the always-rendered status list — a
+   * stable visible destination that stays perceivable even after an expiry
+   * removes the badge — and the token cue marks the keyed pulse inside the
+   * non-interactive token rack: neither ever remounts or animates the
+   * interactive zone subtree that hosts the target controls.
+   */
+  statusMotion?: { kind: StatusMotionKind; sequence: number } | null;
+  tokenMotion?: { kind: StatusMotionKind; sequence: number } | null;
 }
 
 /** Public-only player zone: opponent card identities never enter this component. */
@@ -161,6 +173,8 @@ function PlayerZone({
   handMotion,
   discardMotion,
   shuffleSequence,
+  statusMotion,
+  tokenMotion,
 }: PlayerZoneProps) {
   return (
     <li
@@ -175,10 +189,44 @@ function PlayerZone({
         <strong>{player.name}</strong>
         <span>{player.connected ? 'at the table' : 'away'}</span>
       </header>
-      <p>{tokenLabel(player.victoryTokens)}</p>
+      {/* The committed token count is the projection's own value, printed
+          on the rack — never an optimistic increment. */}
+      <PlayerTokenRack
+        name={player.name}
+        count={player.victoryTokens}
+        motion={tokenMotion ?? null}
+      />
       <div className="game-status-list" role="group" aria-label={`${player.name} status`}>
-        {player.protected && <span>protected</span>}
-        {player.eliminated && <span>eliminated</span>}
+        {/* The keyed non-interactive pulse layer: the one-shot cue mounts a
+            sequence-stamped visual child on this always-rendered status
+            surface, so an expiry stays perceivable after the badge is gone
+            (persistent text still comes only from the projection) and a
+            consecutive same-kind cue retriggers by remounting only this layer —
+            never the interactive zone subtree. */}
+        {statusMotion !== null && statusMotion !== undefined && (
+          <span
+            key={`status-pulse-${statusMotion.sequence}`}
+            className="game-status-pulse"
+            data-motion={statusMotion.kind}
+            data-motion-sequence={statusMotion.sequence}
+            aria-hidden="true"
+          />
+        )}
+        {/* The persistent states render only from the projection: a pinned
+            badge with a text-bearing marker, never a color-only switch. The
+            one-shot cue is a moment, never a state, so an expiry or reconnect
+            can never leave a false persistent marker. */}
+        {player.protected && (
+          <span className="game-status-badge" data-state="protected">
+            <span className="game-status-pin" aria-hidden="true" />
+            protected
+          </span>
+        )}
+        {player.eliminated && (
+          <span className="game-status-badge" data-state="eliminated">
+            eliminated
+          </span>
+        )}
       </div>
       <div
         // One-shot cue replay keys the non-interactive hand surface only:
@@ -235,15 +283,27 @@ function PlayerZone({
               ? '1 card in the pile'
               : `${player.discards.length} cards in the pile`}
           </p>
-          {player.discards.map((discard, index) => (
-            <CardPlaceholder
-              key={index}
-              card={discard.card}
-              assetConfig={assetConfig}
-              originLabel={discardOriginLabel(discard.origin) ?? undefined}
-              label={`${discard.card.value} card in ${player.name}'s public discard pile`}
-            />
-          ))}
+          {player.discards.map((discard, index) => {
+            // Forced-play shells are strengthened structurally (a pinned
+            // marker plus heavier border) and keep their textual origin
+            // stamp — distinguishable without motion or color alone.
+            const forced = discard.origin === 'FORCED_PLAY';
+            return (
+              <div
+                key={index}
+                className="game-discard-slot"
+                data-forced={forced ? 'true' : undefined}
+              >
+                {forced && <span className="game-discard-slot-pin" aria-hidden="true" />}
+                <CardPlaceholder
+                  card={discard.card}
+                  assetConfig={assetConfig}
+                  originLabel={discardOriginLabel(discard.origin) ?? undefined}
+                  label={`${discard.card.value} card in ${player.name}'s public discard pile`}
+                />
+              </div>
+            );
+          })}
         </div>
       )}
     </li>
@@ -272,14 +332,18 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
   // authoritative destination cue once the projection confirms it.
   const motionConsumerRef = useRef<MotionConsumerState>(initialMotionConsumerState());
   const [activeMotion, setActiveMotion] = useState<ActiveMotion | null>(null);
+  // The independent status channel (protection, token awards) resolves from
+  // the same reducer-owned cue batch, confirmed against the projection.
+  const [activeStatus, setActiveStatus] = useState<StatusPlan | null>(null);
   useEffect(() => {
-    const { state: consumer, plan } = advanceMotionConsumer(
-      motionConsumerRef.current,
-      game.motionCue,
-      publicView,
-    );
+    const {
+      state: consumer,
+      plan,
+      statusPlan,
+    } = advanceMotionConsumer(motionConsumerRef.current, game.motionCue, publicView);
     motionConsumerRef.current = consumer;
     setActiveMotion(plan);
+    setActiveStatus(statusPlan);
   }, [game.motionCue, publicView]);
   // The only legality source this table ever consults: the viewer's exact
   // authoritative legalActions, screened by the pure selector.
@@ -527,6 +591,8 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
                   handMotion={handMotionForPlayer(activeMotion, player.id)}
                   discardMotion={discardMotionForPlayer(activeMotion, player.id)}
                   shuffleSequence={shuffleMotion?.sequence}
+                  statusMotion={protectionMotionForPlayer(activeStatus, player.id)}
+                  tokenMotion={tokenMotionForPlayer(activeStatus, player.id)}
                 />
               );
             })}
@@ -625,9 +691,21 @@ export function GameTable({ controller, state, assetConfig }: GameTableProps) {
               <div className="game-round-result-awards">
                 <h3>Victory tokens</h3>
                 <ul>
-                  {resultModel.awards.map((award) => (
-                    <li key={award.playerId}>{roundResultAwardSentence(award)}</li>
-                  ))}
+                  {resultModel.awards.map((award) => {
+                    // One-shot token cue only on the award line the addressed
+                    // public player earned; the printed total is the
+                    // round-result model's committed value.
+                    const awardMotion = tokenMotionForPlayer(activeStatus, award.playerId);
+                    return (
+                      <li
+                        key={award.playerId}
+                        data-motion={awardMotion?.kind}
+                        data-motion-sequence={awardMotion?.sequence}
+                      >
+                        {roundResultAwardSentence(award)}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

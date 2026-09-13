@@ -9,6 +9,8 @@
  * another player's hidden information, and never mutates game state locally.
  * Final M8 art stays outside it.
  */
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
@@ -1601,7 +1603,7 @@ describe('game table motion cues (M8)', () => {
     expect(brunoZone).toHaveAttribute('data-motion', 'effect-settle');
   });
 
-  it('clears every cue attribute when an unsupported-only batch arrives', () => {
+  it('clears every cue attribute when a batch resolves to no motion', () => {
     const settleBatch = motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]);
     const { container, rerender } = render(
       <GameTable
@@ -1611,11 +1613,16 @@ describe('game table motion cues (M8)', () => {
     );
     expect(container.querySelectorAll('[data-motion]')).toHaveLength(1);
 
+    // A genuinely unsupportable batch (a status cue whose seat the roster
+    // never resolves): no motion attribute is attributed, and the cue clears
+    // honestly on both channels.
     rerender(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={flowState({
-          motionCue: deriveMotionCues(settleBatch, [{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]),
+          motionCue: deriveMotionCues(settleBatch, [
+            { type: 'PLAYER_PROTECTED', playerId: 'p-ghost' },
+          ]),
         })}
       />,
     );
@@ -1755,5 +1762,583 @@ describe('game table motion cues (M8)', () => {
       />,
     );
     expect(container.querySelector('[data-motion="draw-settle"]')).toBe(secondNode);
+  });
+});
+
+const motionCss = readFileSync(join(__dirname, '..', 'src', 'app', 'globals.css'), 'utf8');
+
+/**
+ * Selector-reach contract helper (M8): a CSS rule carrying `needle` counts as
+ * reaching this render only when its selector matches at least one node
+ * accepted by `matches`. Attribute presence alone never proves the animation
+ * starts — a rule scoped to a surface the table never renders would be dead
+ * CSS.
+ */
+function reachingRules(
+  container: HTMLElement,
+  needle: string,
+  matches: (node: Element) => boolean,
+): number {
+  const source = motionCss.replace(/\/[*][\s\S]*?[*]\//g, '');
+  const rules = [...source.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)]
+    .map((match) => ({ selector: match[1].trim(), body: match[2] }))
+    .filter((rule) => rule.selector.includes(needle) && rule.body.includes(needle));
+  return rules.filter((rule) => [...container.querySelectorAll(rule.selector)].some(matches))
+    .length;
+}
+
+describe('game table persistent player states (M8)', () => {
+  it('renders the protection pin badge from the projection alone, with no cue', () => {
+    const { container } = render(
+      <GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />,
+    );
+    // The default projection seats Bruno as protected.
+    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    expect(brunoZone).toHaveAttribute('data-protected', 'true');
+    const badge = within(brunoZone as HTMLElement).getByText('protected');
+    expect(badge).toHaveClass('game-status-badge');
+    expect(badge.querySelector('.game-status-pin')).not.toBeNull();
+    // Projection-only persistent state: no motion attribute anywhere.
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('marks the forced discard shell so it is distinguishable without motion or color alone', () => {
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: viewWithDiscards([
+            { card: { value: 5, type: 'SERPIENTE_ENCANTADORA' }, origin: 'FORCED_PLAY' },
+          ]),
+        })}
+      />,
+    );
+    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    // The textual origin stamp persists, and the shell carries a non-color
+    // structural marker.
+    expect(within(pile).getByText('Forced face up')).toBeInTheDocument();
+    const slot = pile.querySelector('.game-discard-slot[data-forced="true"]');
+    expect(slot).not.toBeNull();
+    expect(slot?.querySelector('.game-card-placeholder')).not.toBeNull();
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('keeps the eliminated seat state and its public discard history without any cue', () => {
+    const eliminated = publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 0,
+          handCount: 1,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: true,
+          protected: false,
+          victoryTokens: 0,
+          handCount: 0,
+          discards: [
+            { card: { value: 10, type: 'REY_GATO' }, origin: 'PLAYED' },
+            {
+              card: { value: 3, type: 'CONEJITO_GUERRILLERO' },
+              origin: 'ELIMINATION_REVEAL',
+            },
+          ],
+        },
+      ],
+      round: roundView(),
+    });
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: eliminated })}
+      />,
+    );
+    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    expect(brunoZone).toHaveAttribute('data-eliminated', 'true');
+    expect(within(brunoZone as HTMLElement).getByText('eliminated')).toBeInTheDocument();
+    // Public discard history is retained, with explicit origin labels.
+    const pile = screen.getByRole('group', { name: 'Bruno public discards' });
+    expect(within(pile).getByText(/Rey Gato/i)).toBeInTheDocument();
+    expect(within(pile).getByText('Revealed by elimination')).toBeInTheDocument();
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it('renders victory tokens as a semantic text-readable rack from the committed projection', () => {
+    render(<GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />);
+    const rack = screen.getByRole('group', { name: 'Bruno: 0 victory tokens' });
+    expect(rack).toHaveClass('game-token-rack');
+    expect(within(rack).getByText('0 victory tokens')).toBeInTheDocument();
+    const anaRack = screen.getByRole('group', { name: 'Ana: 1 victory token' });
+    expect(within(anaRack).getByText('1 victory token')).toBeInTheDocument();
+    expect(within(anaRack).getByRole('listitem', { hidden: true })).toBeInTheDocument();
+  });
+});
+
+describe('game table protection & token status cues (M8)', () => {
+  it('marks only the addressed seat with the protection-settle cue once the projection confirms it', () => {
+    const batch = motionCueFrom([{ type: 'PLAYER_PROTECTED', playerId: OTHER_ID }]);
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: batch,
+          publicView: publicView({
+            players: [
+              {
+                id: SELF_ID,
+                name: 'Ana',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 1,
+                handCount: 1,
+                discards: [],
+              },
+              {
+                id: OTHER_ID,
+                name: 'Bruno',
+                connected: true,
+                eliminated: false,
+                protected: false,
+                victoryTokens: 0,
+                handCount: 2,
+                discards: [],
+              },
+            ],
+          }),
+        })}
+      />,
+    );
+    // Event-before-projection: the activation cue waits for the persistent
+    // projection state, never animating on a stale view.
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+
+    const confirmedView = publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 1,
+          handCount: 1,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: false,
+          protected: true,
+          victoryTokens: 0,
+          handCount: 2,
+          discards: [],
+        },
+      ],
+    });
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: confirmedView })}
+      />,
+    );
+    const brunoStatus = screen.getByRole('group', { name: 'Bruno status' });
+    // The cue mounts the keyed non-interactive pulse layer inside the
+    // always-rendered status surface; the surface itself stays unmarked.
+    const settlePulse = brunoStatus.querySelector('.game-status-pulse[data-motion]');
+    expect(settlePulse).toHaveAttribute('data-motion', 'protection-settle');
+    expect(settlePulse).toHaveAttribute('data-motion-sequence', '1');
+    expect(brunoStatus).not.toHaveAttribute('data-motion');
+    expect(
+      screen.getByRole('group', { name: 'Ana status' }).querySelector('[data-motion]'),
+    ).toBeNull();
+    // The persistent badge is present from the projection; the cue never
+    // reveals hidden-card information.
+    expect(within(brunoStatus as HTMLElement).getByText('protected')).toBeInTheDocument();
+    expect(container.textContent).not.toContain('instance');
+  });
+
+  it('fires the one-shot expiry cue from the projection and leaves no false persistent marker', () => {
+    const batch = motionCueFrom([{ type: 'PROTECTION_EXPIRED', playerId: OTHER_ID }]);
+    const clearedView = publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 1,
+          handCount: 1,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 0,
+          handCount: 2,
+          discards: [],
+        },
+      ],
+    });
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: clearedView })}
+      />,
+    );
+    const brunoStatus = screen.getByRole('group', { name: 'Bruno status' });
+    // The expiry cue mounts the keyed pulse layer on the stable, always-rendered
+    // status surface — perceivable even though the badge is now gone.
+    const expirePulse = brunoStatus.querySelector('.game-status-pulse[data-motion]');
+    expect(expirePulse).toHaveAttribute('data-motion', 'protection-expire');
+    expect(expirePulse).toHaveAttribute('data-motion-sequence', '1');
+    expect(brunoStatus).not.toHaveAttribute('data-motion');
+    // The persistent marker is gone with the projection: no stale badge.
+    expect(screen.queryByText(/protected/i)).toBeNull();
+    expect(brunoStatus.closest('li')).toHaveAttribute('data-protected', 'false');
+  });
+
+  it('holds the expiry cue while the projection still shows the protected state', () => {
+    const batch = motionCueFrom([{ type: 'PROTECTION_EXPIRED', playerId: OTHER_ID }]);
+    const { container } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: publicView() })}
+      />,
+    );
+    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+  });
+
+  it("marks only the addressed player's token rack with the committed-award cue once the projected count changes", () => {
+    const batch = motionCueFrom([{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]);
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: viewWithDiscards([], []) })}
+      />,
+    );
+    // Event-before-projection: the batch is captured against the stale pre-award
+    // count, so no cue is confirmed yet — a stale count has no cue.
+    expect(container.querySelector('.game-token-pulse[data-motion]')).toBeNull();
+
+    // The confirming projection: the addressed seat's committed count changed.
+    const confirmingView = viewWithDiscards([], []);
+    confirmingView.players = confirmingView.players.map((player) =>
+      player.id === OTHER_ID ? { ...player, victoryTokens: 2 } : player,
+    );
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: confirmingView })}
+      />,
+    );
+    const brunoRack = screen.getByRole('group', { name: 'Bruno: 2 victory tokens' });
+    // The cue lives on the keyed non-interactive pulse layer inside the rack.
+    const rackPulse = brunoRack.querySelector('.game-token-pulse[data-motion]');
+    expect(rackPulse).toHaveAttribute('data-motion', 'token-settle');
+    expect(rackPulse).toHaveAttribute('data-motion-sequence', '1');
+    expect(brunoRack).not.toHaveAttribute('data-motion');
+    // The displayed count is the committed projection value, never an
+    // optimistic increment beyond what the projection carries.
+    expect(within(brunoRack).getByText('2 victory tokens')).toBeInTheDocument();
+    expect(
+      screen.getByRole('group', { name: 'Ana: 1 victory token' }).querySelector('[data-motion]'),
+    ).toBeNull();
+  });
+
+  it('keeps keyboard focus and control identity while a protection cue lands on that zone', async () => {
+    const hand = [
+      { instanceId: 'own-instance-2', value: 1, type: 'PECERA_DE_CRISTAL' as CardType },
+    ];
+    const targeted: PrivateGameView['legalActions'] = [
+      {
+        type: 'PLAY_CARD',
+        actorId: SELF_ID,
+        cardInstanceId: 'own-instance-2',
+        targetId: OTHER_ID,
+      },
+    ];
+    const baseView = publicView();
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: baseView,
+          privateView: privateView(SELF_ID, hand, targeted, baseView),
+        })}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    const targetButton = screen.getByRole('button', {
+      name: 'Play Pecera de Cristal on Bruno',
+    });
+    targetButton.focus();
+    expect(document.activeElement).toBe(targetButton);
+
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: publicView(),
+          privateView: privateView(SELF_ID, hand, targeted, publicView()),
+          motionCue: motionCueFrom([{ type: 'PLAYER_PROTECTED', playerId: OTHER_ID }]),
+        })}
+      />,
+    );
+    const stillLive = screen.getByRole('button', {
+      name: 'Play Pecera de Cristal on Bruno',
+    });
+    expect(stillLive).toBe(targetButton);
+    expect(document.activeElement).toBe(targetButton);
+  });
+
+  it('keeps keyboard focus and rack identity while consecutive token cues retrigger the keyed pulse', () => {
+    const batch = motionCueFrom([{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]);
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: viewWithDiscards([], []) })}
+      />,
+    );
+    // Event-before-projection: the stale pre-award count cannot confirm yet.
+    expect(container.querySelector('.game-token-pulse[data-motion]')).toBeNull();
+
+    // The confirming projection: the addressed seat's committed count changed.
+    const confirmingView = viewWithDiscards([], []);
+    confirmingView.players = confirmingView.players.map((player) =>
+      player.id === OTHER_ID ? { ...player, victoryTokens: 2 } : player,
+    );
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: confirmingView })}
+      />,
+    );
+    const rackNode = container.querySelector('.game-token-rack');
+    expect(rackNode).not.toBeNull();
+    let pulseNode = container.querySelector('.game-token-pulse[data-motion="token-settle"]');
+    expect(pulseNode).toHaveAttribute('data-motion-sequence', '1');
+    rackNode?.setAttribute('tabindex', '-1');
+    (rackNode as HTMLElement).focus();
+    expect(document.activeElement).toBe(rackNode);
+
+    // Re-rendering the same batch never remounts the rack subtree and never
+    // replays the pulse: one batch is exactly one animation.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: batch, publicView: confirmingView })}
+      />,
+    );
+    expect(container.querySelector('.game-token-pulse[data-motion="token-settle"]')).toBe(
+      pulseNode,
+    );
+    expect(container.querySelector('.game-token-rack')).toBe(rackNode);
+    expect(document.activeElement).toBe(rackNode);
+
+    // A consecutive same-kind batch retriggers by remounting only the keyed
+    // pulse layer — the rack (and the interactive zone subtree) stays live.
+    // The second batch is captured against the still-committed count (2) and
+    // waits for its own confirming projection (3).
+    const secondBatch = deriveMotionCues(batch, [{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]);
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: secondBatch, publicView: confirmingView })}
+      />,
+    );
+    expect(container.querySelector('.game-token-pulse[data-motion-sequence="2"]')).toBeNull();
+
+    const advancedView = viewWithDiscards([], []);
+    advancedView.players = advancedView.players.map((player) =>
+      player.id === OTHER_ID ? { ...player, victoryTokens: 3 } : player,
+    );
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ motionCue: secondBatch, publicView: advancedView })}
+      />,
+    );
+    pulseNode = container.querySelector('.game-token-pulse[data-motion="token-settle"]');
+    expect(pulseNode).toHaveAttribute('data-motion-sequence', '2');
+    expect(container.querySelector('.game-token-rack')).toBe(rackNode);
+    expect(document.activeElement).toBe(rackNode);
+  });
+
+  it('retriggers consecutive same-kind protection cues without remounting the interactive zone subtree', async () => {
+    const hand = [
+      { instanceId: 'own-instance-2', value: 1, type: 'PECERA_DE_CRISTAL' as CardType },
+    ];
+    const targeted: PrivateGameView['legalActions'] = [
+      {
+        type: 'PLAY_CARD',
+        actorId: SELF_ID,
+        cardInstanceId: 'own-instance-2',
+        targetId: OTHER_ID,
+      },
+    ];
+    const firstBatch = motionCueFrom([{ type: 'PLAYER_PROTECTED', playerId: OTHER_ID }]);
+    const baseView = publicView();
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: baseView,
+          privateView: privateView(SELF_ID, hand, targeted, baseView),
+          motionCue: firstBatch,
+        })}
+      />,
+    );
+    // The first activation lands on Bruno's already-protected projection.
+    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    expect(
+      brunoZone?.querySelector('.game-status-pulse[data-motion="protection-settle"]'),
+    ).toHaveAttribute('data-motion-sequence', '1');
+    // Arm the target selection so the zone hosts a live, focused control.
+    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    const targetButton = screen.getByRole('button', {
+      name: 'Play Pecera de Cristal on Bruno',
+    });
+    targetButton.focus();
+    expect(document.activeElement).toBe(targetButton);
+
+    // A consecutive same-kind activation batch remounts only the keyed status
+    // pulse: the zone subtree — and the live, focused target control — stays.
+    const secondBatch = deriveMotionCues(firstBatch, [
+      { type: 'PLAYER_PROTECTED', playerId: OTHER_ID },
+    ]);
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          publicView: publicView(),
+          privateView: privateView(SELF_ID, hand, targeted, publicView()),
+          motionCue: secondBatch,
+        })}
+      />,
+    );
+    expect(
+      container
+        .querySelector('.game-status-pulse[data-motion="protection-settle"]')
+        ?.getAttribute('data-motion-sequence'),
+    ).toBe('2');
+    const stillLive = screen.getByRole('button', {
+      name: 'Play Pecera de Cristal on Bruno',
+    });
+    expect(stillLive).toBe(targetButton);
+    expect(document.activeElement).toBe(targetButton);
+    expect(container.querySelector('.game-player-zone[data-player-id="p-other"]')).toBe(brunoZone);
+  });
+
+  it('reaches the rendered pulse layers through stylesheet rules, including the badge-less expiry', () => {
+    // The token-settle rule must actually reach the rendered rack pulse —
+    // attribute presence alone never proves the animation starts.
+    const staleView = viewWithDiscards([], []);
+    const { container: rackContainer, rerender: rerenderRack } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]),
+          publicView: staleView,
+        })}
+      />,
+    );
+    const confirmingView = viewWithDiscards([], []);
+    confirmingView.players = confirmingView.players.map((player) =>
+      player.id === OTHER_ID ? { ...player, victoryTokens: 2 } : player,
+    );
+    rerenderRack(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'TOKEN_AWARDED', playerId: OTHER_ID }]),
+          publicView: confirmingView,
+        })}
+      />,
+    );
+    const rackPulse = rackContainer.querySelector('.game-token-pulse[data-motion="token-settle"]');
+    expect(rackPulse).not.toBeNull();
+    expect(
+      reachingRules(rackContainer, 'token-settle', (node) =>
+        node.classList.contains('game-token-pulse'),
+      ),
+    ).toBeGreaterThan(0);
+
+    // The protection-settle rule must actually reach the rendered status pulse.
+    const { container: settleContainer } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'PLAYER_PROTECTED', playerId: OTHER_ID }]),
+        })}
+      />,
+    );
+    expect(
+      settleContainer.querySelector('.game-status-pulse[data-motion="protection-settle"]'),
+    ).not.toBeNull();
+    expect(
+      reachingRules(settleContainer, 'protection-settle', (node) =>
+        node.classList.contains('game-status-pulse'),
+      ),
+    ).toBeGreaterThan(0);
+
+    // The protection-expire rule must reach the keyed pulse on the stable
+    // always-rendered status surface, even after the badge is gone.
+    const clearedView = publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 1,
+          handCount: 1,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 0,
+          handCount: 2,
+          discards: [],
+        },
+      ],
+    });
+    const { container: expireContainer } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          motionCue: motionCueFrom([{ type: 'PROTECTION_EXPIRED', playerId: OTHER_ID }]),
+          publicView: clearedView,
+        })}
+      />,
+    );
+    const expirePulse = expireContainer.querySelector(
+      '.game-status-list .game-status-pulse[data-motion="protection-expire"]',
+    );
+    expect(expirePulse).not.toBeNull();
+    expect(expirePulse?.parentElement).toHaveClass('game-status-list');
+    expect(
+      reachingRules(expireContainer, 'protection-expire', (node) =>
+        node.classList.contains('game-status-pulse'),
+      ),
+    ).toBeGreaterThan(0);
   });
 });

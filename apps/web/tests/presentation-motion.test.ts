@@ -12,9 +12,12 @@ import {
   discardMotionForPlayer,
   discardOriginLabel,
   evaluateBatchMotion,
+  evaluateBatchStatusMotion,
   handMotionForPlayer,
   initialMotionConsumerState,
+  protectionMotionForPlayer,
   tableShuffleMotion,
+  tokenMotionForPlayer,
   zoneMotionForPlayer,
   type PendingMotionBatch,
 } from '@/lib/game/presentation-motion';
@@ -79,14 +82,20 @@ function cueStateFrom(events: GamePublicEvent[]): MotionCueState {
 /**
  * The pending batch shape the consumer derives from a cue state: the newest
  * batch's own snapshot, optionally carrying the captured pre-cue public
- * handCounts.
+ * handCounts and victoryTokens.
  */
 function batchOf(
   events: GamePublicEvent[],
   preCounts: Record<string, number> | null = null,
+  preTokens: Record<string, number> | null = null,
 ): PendingMotionBatch {
   const cueState = cueStateFrom(events);
-  return { sequence: cueState.sequence, cues: cueState.lastBatch?.cues ?? [], preCounts };
+  return {
+    sequence: cueState.sequence,
+    cues: cueState.lastBatch?.cues ?? [],
+    preCounts,
+    preTokens,
+  };
 }
 
 describe('authoritative batch mapping (evaluateBatchMotion)', () => {
@@ -292,20 +301,21 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
     });
   });
 
-  it('never animates protection or token cues', () => {
-    const roster = view([seat(SELF_ID, 'Ana')]);
-    expect(
-      evaluateBatchMotion(batchOf([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]), roster),
-    ).toEqual({ verdict: 'none' });
+  it('never lets protection or token cues steal the focal card moment', () => {
+    const roster = view([seat(SELF_ID, 'Ana', { discards: [discard(10, 'REY_GATO', 'PLAYED')] })]);
     expect(
       evaluateBatchMotion(
         batchOf([
           { type: 'PLAYER_PROTECTED', playerId: SELF_ID },
-          { type: 'PROTECTION_EXPIRED', playerId: SELF_ID },
+          { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          { type: 'CARD_PLAYED', playerId: SELF_ID, card: card(10, 'REY_GATO') },
         ]),
         roster,
       ),
-    ).toEqual({ verdict: 'none' });
+    ).toEqual({
+      verdict: 'animate',
+      plan: { kind: 'card-landing', sequence: 1, playerId: SELF_ID },
+    });
   });
 
   it('fails closed on a cue-shaped value the seam never produced', () => {
@@ -327,6 +337,331 @@ describe('authoritative batch mapping (evaluateBatchMotion)', () => {
     );
     expect(JSON.stringify(outcome)).not.toContain('instance');
     expect(JSON.stringify(outcome)).not.toContain('inst-');
+  });
+});
+
+describe('status-channel mapping (evaluateBatchStatusMotion)', () => {
+  it('maps TOKEN_AWARDED to a token-settle only once the projected count differs from the pre-cue count', () => {
+    const roster = view([seat(SELF_ID, 'Ana'), seat(OTHER_ID, 'Bruno'), seat(THIRD_ID, 'Caro')]);
+    const batch = batchOf(
+      [
+        { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+        { type: 'TOKEN_AWARDED', playerId: OTHER_ID },
+      ],
+      { [SELF_ID]: 0, [OTHER_ID]: 0 },
+      { [SELF_ID]: 0, [OTHER_ID]: 0 },
+    );
+
+    // Event-before-projection: the projection still shows the stale pre-cue
+    // counts, so no cue is confirmed yet — a stale count has no cue.
+    expect(evaluateBatchStatusMotion(batch, roster)).toEqual({
+      verdict: 'await-projection',
+      plan: null,
+    });
+
+    // The confirming projection: both awarded seats' committed counts changed.
+    const confirmed = view([
+      seat(SELF_ID, 'Ana', { victoryTokens: 3 }),
+      seat(OTHER_ID, 'Bruno', { victoryTokens: 1 }),
+      seat(THIRD_ID, 'Caro'),
+    ]);
+    expect(evaluateBatchStatusMotion(batch, confirmed)).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [
+          { kind: 'token-settle', sequence: 1, playerId: SELF_ID },
+          { kind: 'token-settle', sequence: 1, playerId: OTHER_ID },
+        ],
+      },
+    });
+  });
+
+  it('never confirms a token award without a captured pre-cue count (fail closed)', () => {
+    const batch = batchOf([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]);
+    const roster = view([seat(SELF_ID, 'Ana', { victoryTokens: 2 })]);
+    expect(evaluateBatchStatusMotion(batch, roster)).toEqual({
+      verdict: 'await-projection',
+      plan: null,
+    });
+
+    // A pre-cue snapshot without the awarded seat is equally unconfirmable.
+    const unaddressed = batchOf([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }], null, {
+      [OTHER_ID]: 3,
+    });
+    expect(evaluateBatchStatusMotion(unaddressed, roster)).toEqual({
+      verdict: 'await-projection',
+      plan: null,
+    });
+  });
+
+  it('preserves a protection activation and an expiry for different players in one batch', () => {
+    // The reachable mixed batch: Ana gains protection while Bruno's expires.
+    const confirming = view([
+      seat(SELF_ID, 'Ana', { protected: true }),
+      seat(OTHER_ID, 'Bruno', { protected: false }),
+    ]);
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf([
+          { type: 'PLAYER_PROTECTED', playerId: SELF_ID },
+          { type: 'PROTECTION_EXPIRED', playerId: OTHER_ID },
+        ]),
+        confirming,
+      ),
+    ).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [
+          { kind: 'protection-settle', sequence: 1, playerId: SELF_ID },
+          { kind: 'protection-expire', sequence: 1, playerId: OTHER_ID },
+        ],
+      },
+    });
+  });
+
+  it('keeps a token award and a protection cue as separate motions in one batch', () => {
+    const confirming = view([
+      seat(SELF_ID, 'Ana', { victoryTokens: 2, protected: true }),
+      seat(OTHER_ID, 'Bruno'),
+    ]);
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf(
+          [
+            { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+            { type: 'PLAYER_PROTECTED', playerId: SELF_ID },
+          ],
+          null,
+          { [SELF_ID]: 1 },
+        ),
+        confirming,
+      ),
+    ).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [
+          { kind: 'token-settle', sequence: 1, playerId: SELF_ID },
+          { kind: 'protection-settle', sequence: 1, playerId: SELF_ID },
+        ],
+      },
+    });
+  });
+
+  it('animates the already-confirmed cues of a batch while the rest keep waiting', () => {
+    // Bruno's protection is confirmed; Ana's award still shows its stale count.
+    const partial = view([
+      seat(SELF_ID, 'Ana', { victoryTokens: 1 }),
+      seat(OTHER_ID, 'Bruno', { protected: true }),
+    ]);
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf(
+          [
+            { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+            { type: 'PLAYER_PROTECTED', playerId: OTHER_ID },
+          ],
+          null,
+          { [SELF_ID]: 1 },
+        ),
+        partial,
+      ),
+    ).toEqual({
+      verdict: 'await-projection',
+      plan: {
+        sequence: 1,
+        motions: [{ kind: 'protection-settle', sequence: 1, playerId: OTHER_ID }],
+      },
+    });
+  });
+
+  it('deduplicates repeated awards for one shared winner', () => {
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf(
+          [
+            { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+            { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          ],
+          null,
+          { [SELF_ID]: 0 },
+        ),
+        view([seat(SELF_ID, 'Ana', { victoryTokens: 2 })]),
+      ),
+    ).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [{ kind: 'token-settle', sequence: 1, playerId: SELF_ID }],
+      },
+    });
+  });
+
+  it('drops unresolvable awarded seats fail-closed and never carries a raw id', () => {
+    const partial = evaluateBatchStatusMotion(
+      batchOf(
+        [
+          { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          { type: 'TOKEN_AWARDED', playerId: 'p-ghost' },
+        ],
+        null,
+        { [SELF_ID]: 0 },
+      ),
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 1 })]),
+    );
+    expect(partial).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [{ kind: 'token-settle', sequence: 1, playerId: SELF_ID }],
+      },
+    });
+    expect(JSON.stringify(partial)).not.toContain('p-ghost');
+
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf([{ type: 'TOKEN_AWARDED', playerId: 'p-ghost' }]),
+        view([seat(SELF_ID, 'Ana')]),
+      ),
+    ).toEqual({ verdict: 'none' });
+  });
+
+  it('maps PLAYER_PROTECTED to an activation cue only once the projection shows the persistent state', () => {
+    const batch = batchOf([{ type: 'PLAYER_PROTECTED', playerId: SELF_ID }]);
+    const before = view([seat(SELF_ID, 'Ana', { protected: false })]);
+    expect(evaluateBatchStatusMotion(batch, before)).toEqual({
+      verdict: 'await-projection',
+      plan: null,
+    });
+
+    const after = view([seat(SELF_ID, 'Ana', { protected: true })]);
+    expect(evaluateBatchStatusMotion(batch, after)).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [{ kind: 'protection-settle', sequence: 1, playerId: SELF_ID }],
+      },
+    });
+  });
+
+  it('maps PROTECTION_EXPIRED to an expiry cue only once the projection drops the persistent state', () => {
+    const batch = batchOf([{ type: 'PROTECTION_EXPIRED', playerId: SELF_ID }]);
+    const still = view([seat(SELF_ID, 'Ana', { protected: true })]);
+    expect(evaluateBatchStatusMotion(batch, still)).toEqual({
+      verdict: 'await-projection',
+      plan: null,
+    });
+
+    const cleared = view([seat(SELF_ID, 'Ana', { protected: false })]);
+    expect(evaluateBatchStatusMotion(batch, cleared)).toEqual({
+      verdict: 'animate',
+      plan: {
+        sequence: 1,
+        motions: [{ kind: 'protection-expire', sequence: 1, playerId: SELF_ID }],
+      },
+    });
+  });
+
+  it('never attributes status motion to an unknown seat', () => {
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf([{ type: 'PLAYER_PROTECTED', playerId: 'p-ghost' }]),
+        view([seat(SELF_ID, 'Ana')]),
+      ),
+    ).toEqual({ verdict: 'none' });
+  });
+
+  it('stays motionless for a batch without any status cue', () => {
+    expect(
+      evaluateBatchStatusMotion(
+        batchOf([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]),
+        view([seat(SELF_ID, 'Ana')]),
+      ),
+    ).toEqual({ verdict: 'none' });
+  });
+
+  it('carries no instance identity in any status plan', () => {
+    const outcome = evaluateBatchStatusMotion(
+      batchOf([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]),
+      view([seat(SELF_ID, 'Ana')]),
+    );
+    expect(JSON.stringify(outcome)).not.toContain('instance');
+    expect(JSON.stringify(outcome)).not.toContain('inst-');
+  });
+});
+
+describe('status zone helpers', () => {
+  it('tokenMotionForPlayer addresses the rack of awarded seats only', () => {
+    const plan = evaluateBatchStatusMotion(
+      batchOf(
+        [
+          { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          { type: 'TOKEN_AWARDED', playerId: OTHER_ID },
+        ],
+        null,
+        { [SELF_ID]: 0, [OTHER_ID]: 0 },
+      ),
+      view([
+        seat(SELF_ID, 'Ana', { victoryTokens: 1 }),
+        seat(OTHER_ID, 'Bruno', { victoryTokens: 2 }),
+        seat(THIRD_ID, 'Caro'),
+      ]),
+    );
+    const active = plan.verdict === 'animate' ? plan.plan : null;
+    expect(tokenMotionForPlayer(active, SELF_ID)).toEqual({ kind: 'token-settle', sequence: 1 });
+    expect(tokenMotionForPlayer(active, OTHER_ID)).toEqual({ kind: 'token-settle', sequence: 1 });
+    expect(tokenMotionForPlayer(active, THIRD_ID)).toBeNull();
+    expect(protectionMotionForPlayer(active, SELF_ID)).toBeNull();
+    expect(tokenMotionForPlayer(null, SELF_ID)).toBeNull();
+  });
+
+  it('protectionMotionForPlayer addresses the cued seat only, beside any token motion', () => {
+    const settle = evaluateBatchStatusMotion(
+      batchOf([{ type: 'PLAYER_PROTECTED', playerId: SELF_ID }]),
+      view([seat(SELF_ID, 'Ana', { protected: true }), seat(OTHER_ID, 'Bruno')]),
+    );
+    const settlePlan = settle.verdict === 'animate' ? settle.plan : null;
+    expect(protectionMotionForPlayer(settlePlan, SELF_ID)).toEqual({
+      kind: 'protection-settle',
+      sequence: 1,
+    });
+    expect(protectionMotionForPlayer(settlePlan, OTHER_ID)).toBeNull();
+    expect(tokenMotionForPlayer(settlePlan, SELF_ID)).toBeNull();
+    expect(protectionMotionForPlayer(null, SELF_ID)).toBeNull();
+
+    const expire = evaluateBatchStatusMotion(
+      batchOf([{ type: 'PROTECTION_EXPIRED', playerId: OTHER_ID }]),
+      view([seat(SELF_ID, 'Ana'), seat(OTHER_ID, 'Bruno', { protected: false })]),
+    );
+    const expirePlan = expire.verdict === 'animate' ? expire.plan : null;
+    expect(protectionMotionForPlayer(expirePlan, OTHER_ID)).toEqual({
+      kind: 'protection-expire',
+      sequence: 1,
+    });
+
+    // One mixed batch resolves both helpers for the same seat independently.
+    const mixed = evaluateBatchStatusMotion(
+      batchOf(
+        [
+          { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          { type: 'PLAYER_PROTECTED', playerId: SELF_ID },
+        ],
+        null,
+        { [SELF_ID]: 0 },
+      ),
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 2, protected: true })]),
+    );
+    const mixedPlan = mixed.verdict === 'animate' ? mixed.plan : null;
+    expect(tokenMotionForPlayer(mixedPlan, SELF_ID)).toEqual({
+      kind: 'token-settle',
+      sequence: 1,
+    });
+    expect(protectionMotionForPlayer(mixedPlan, SELF_ID)).toEqual({
+      kind: 'protection-settle',
+      sequence: 1,
+    });
   });
 });
 
@@ -355,14 +690,78 @@ describe('motion consumer (advanceMotionConsumer)', () => {
   });
 
   it('clears all cue attributes on an unsupported-only batch', () => {
-    const cueState = cueStateFrom([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]);
-    const { state, plan } = advanceMotionConsumer(
+    const cueState = cueStateFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]);
+    const { state, plan, statusPlan } = advanceMotionConsumer(
       initialMotionConsumerState(),
       cueState,
       view([seat(SELF_ID, 'Ana')]),
     );
-    expect(plan).toBeNull();
+    expect(plan).toEqual({ kind: 'effect-settle', sequence: 1, playerId: SELF_ID });
+    expect(statusPlan).toBeNull();
     expect(state.pending).toBeNull();
+  });
+
+  it('waits for the projection when a token batch arrives before the projection, then animates once', () => {
+    const cueState = cueStateFrom([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]);
+    const preView = view([seat(SELF_ID, 'Ana', { victoryTokens: 1 })]);
+
+    // Event-before-projection: the batch is captured against the pre-award
+    // projection, which cannot confirm the committed count change yet.
+    const first = advanceMotionConsumer(initialMotionConsumerState(), cueState, preView);
+    expect(first.plan).toBeNull();
+    expect(first.statusPlan).toBeNull();
+    expect(first.state.pending).not.toBeNull();
+    expect(first.state.pending?.preTokens).toEqual({ [SELF_ID]: 1 });
+
+    // A projection-only update that still shows the stale count never confirms.
+    const stale = advanceMotionConsumer(
+      first.state,
+      cueState,
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 1, handCount: 3 })]),
+    );
+    expect(stale.statusPlan).toBeNull();
+    expect(stale.state.pending).not.toBeNull();
+
+    // The confirming authoritative projection: the committed count changed.
+    const confirmed = advanceMotionConsumer(
+      stale.state,
+      cueState,
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 3 })]),
+    );
+    expect(confirmed.statusPlan).toEqual({
+      sequence: 1,
+      motions: [{ kind: 'token-settle', sequence: 1, playerId: SELF_ID }],
+    });
+    expect(confirmed.state.pending).toBeNull();
+
+    // Replaying the same batch identity never animates again.
+    const settled = advanceMotionConsumer(
+      confirmed.state,
+      cueState,
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 3 })]),
+    );
+    expect(settled.statusPlan).toBe(confirmed.statusPlan);
+    expect(settled.state.cursor).toEqual(confirmed.state.cursor);
+  });
+
+  it('never cues a token award across a projection-only reconnect-style reset', () => {
+    const cueState = cueStateFrom([{ type: 'TOKEN_AWARDED', playerId: SELF_ID }]);
+    const active = advanceMotionConsumer(
+      initialMotionConsumerState(),
+      cueState,
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 1 })]),
+    );
+    expect(active.statusPlan).toBeNull();
+
+    // The game cleared and re-projected: motion cues reset, motionless.
+    const reset = advanceMotionConsumer(
+      active.state,
+      createInitialMotionCueState(),
+      view([seat(SELF_ID, 'Ana', { victoryTokens: 3 })]),
+    );
+    expect(reset.statusPlan).toBeNull();
+    expect(reset.state.pending).toBeNull();
+    expect(reset.state.cursor).toEqual({ sequence: 0 });
   });
 
   it('replaces a still-waiting batch when the next batch arrives', () => {
@@ -443,6 +842,47 @@ describe('motion consumer (advanceMotionConsumer)', () => {
     expect(again.state.cursor).toEqual(first.state.cursor);
   });
 
+  it('drives the status channel through the same pending batch and confirmation discipline', () => {
+    const cueState = cueStateFrom([{ type: 'PLAYER_PROTECTED', playerId: SELF_ID }]);
+    const before = view([seat(SELF_ID, 'Ana', { protected: false })]);
+    const waiting = advanceMotionConsumer(initialMotionConsumerState(), cueState, before);
+    expect(waiting.plan).toBeNull();
+    expect(waiting.statusPlan).toBeNull();
+    expect(waiting.state.pending).not.toBeNull();
+
+    const confirmed = advanceMotionConsumer(
+      waiting.state,
+      cueState,
+      view([seat(SELF_ID, 'Ana', { protected: true })]),
+    );
+    expect(confirmed.statusPlan).toEqual({
+      sequence: 1,
+      motions: [{ kind: 'protection-settle', sequence: 1, playerId: SELF_ID }],
+    });
+    expect(confirmed.state.pending).toBeNull();
+  });
+
+  it('clears a stale status plan when the next batch resolves to no status motion', () => {
+    const protectedBatch = cueStateFrom([{ type: 'PLAYER_PROTECTED', playerId: SELF_ID }]);
+    const settled = advanceMotionConsumer(
+      initialMotionConsumerState(),
+      protectedBatch,
+      view([seat(SELF_ID, 'Ana', { protected: true })]),
+    );
+    expect(settled.statusPlan).not.toBeNull();
+
+    const next = deriveMotionCues(protectedBatch, [{ type: 'CARD_DRAWN', playerId: OTHER_ID }]);
+    const cleared = advanceMotionConsumer(
+      settled.state,
+      next,
+      view([seat(SELF_ID, 'Ana', { protected: true }), seat(OTHER_ID, 'Bruno')]),
+    );
+    expect(cleared.statusPlan).toBeNull();
+    // The card channel still awaits its own draw confirmation, so the batch
+    // legitimately stays pending until the projection confirms it.
+    expect(cleared.state.pending).not.toBeNull();
+  });
+
   it('collapses to a motionless state on a sequence reset (reconnect or cleared game)', () => {
     const cueState = cueStateFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]);
     const active = advanceMotionConsumer(
@@ -452,12 +892,23 @@ describe('motion consumer (advanceMotionConsumer)', () => {
     );
     expect(active.plan).not.toBeNull();
 
-    const reset = advanceMotionConsumer(
+    const protectedState = deriveMotionCues(cueState, [
+      { type: 'PLAYER_PROTECTED', playerId: OTHER_ID },
+    ]);
+    const statusActive = advanceMotionConsumer(
       active.state,
+      protectedState,
+      view([seat(SELF_ID, 'Ana'), seat(OTHER_ID, 'Bruno', { protected: true })]),
+    );
+    expect(statusActive.statusPlan).not.toBeNull();
+
+    const reset = advanceMotionConsumer(
+      statusActive.state,
       createInitialMotionCueState(),
       view([seat(SELF_ID, 'Ana')]),
     );
     expect(reset.plan).toBeNull();
+    expect(reset.statusPlan).toBeNull();
     expect(reset.state.pending).toBeNull();
     expect(reset.state.cursor).toEqual({ sequence: 0 });
 
@@ -645,6 +1096,9 @@ describe('motion stylesheet contract (static source)', () => {
     'motion-hand-shuffle',
     'motion-hand-exchange',
     'motion-effect-settle',
+    'motion-protection-settle',
+    'motion-protection-expire',
+    'motion-token-settle',
   ];
 
   /** Extracts the full brace-balanced block that follows `startMarker`. */
@@ -704,5 +1158,24 @@ describe('motion stylesheet contract (static source)', () => {
     expect(reduced).toContain('[data-motion]');
     expect(reduced).toContain('animation: none');
     expect(reduced).toContain('transform: none');
+    // The keyed status and token pulse layers are hooked through data-motion,
+    // so the generic [data-motion] collapse reaches them exactly like every
+    // other cue surface.
+    expect(css).toContain(".game-status-pulse[data-motion='protection-settle']");
+    expect(css).toContain(".game-status-pulse[data-motion='protection-expire']");
+    expect(css).toContain(".game-token-pulse[data-motion='token-settle']");
+  });
+
+  it('scopes the persistent-state styles to existing hooks without color-only meaning', () => {
+    // The protection badge is a text-bearing pin marker, not a color switch.
+    expect(css).toContain('.game-status-badge');
+    expect(css).toContain('.game-status-pin');
+    // The forced-play shell is strengthened structurally (border weight),
+    // never by hue alone.
+    expect(css).toContain(".game-discard-slot[data-forced='true']");
+    // The keyed pulse layers are the status-cue destinations: the expiry pulse
+    // must exist as a styled, reachable element, not a dead selector.
+    expect(css).toContain('.game-status-pulse');
+    expect(css).toContain('.game-token-pulse');
   });
 });

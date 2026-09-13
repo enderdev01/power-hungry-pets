@@ -425,12 +425,23 @@ body {
   margin-top: 0.5rem;
 }
 
-.game-status-list span {
+.game-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   border: 1px solid currentColor;
   padding: 0.1rem 0.35rem;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+/* The badge's enamel-pin core: a structural marker, never a color-only one. */
+.game-status-pin {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 .game-player-zone[data-protected='true'] .game-status-list {
@@ -913,11 +924,11 @@ body {
 /* The landing/flip targets the newest public shell of the marked pile; the
    pile-count paragraph is a different element type, so :last-of-type is
    exactly the newest card. */
-.game-discards[data-motion='card-landing'] .game-card-placeholder:last-of-type {
+.game-discards[data-motion='card-landing'] .game-discard-slot:last-of-type .game-card-placeholder {
   animation: motion-card-landing 280ms ease-out;
 }
 
-.game-discards[data-motion='card-flip'] .game-card-placeholder:last-of-type {
+.game-discards[data-motion='card-flip'] .game-discard-slot:last-of-type .game-card-placeholder {
   animation: motion-card-flip 220ms ease-out;
 }
 
@@ -951,6 +962,140 @@ body {
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--paper-ink);
+}
+
+/* Forced-play shells are strengthened structurally — a pinned marker plus a
+   heavier committed border — never by hue alone; the textual origin stamp
+   carries the meaning either way. */
+.game-discard-slot {
+  display: grid;
+  justify-items: start;
+  gap: 0.2rem;
+}
+
+.game-discard-slot[data-forced='true'] {
+  border: 2px solid var(--game-placeholder-ink);
+  padding: 0.35rem;
+}
+
+.game-discard-slot-pin {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--game-placeholder-ink);
+}
+
+/* M8 status-channel motion: one-shot cues for the persistent table states
+   (protection activation/expiry, victory-token awards). Transform and opacity
+   only, 180–320ms, no loops; the persistent text and state always remain. */
+
+@keyframes motion-protection-settle {
+  from {
+    opacity: 0.4;
+    transform: translateY(0.15rem) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-protection-expire {
+  from {
+    opacity: 0.5;
+    transform: translateY(0.12rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-token-settle {
+  from {
+    opacity: 0.45;
+    transform: translateY(-0.25rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* The keyed non-interactive pulse layers: each one-shot status cue mounts a
+   small sequence-stamped visual child on its stable visible surface — the
+   always-rendered status list (an expiry stays perceivable there even after
+   the badge is gone) and the token rack. Replaying a cue remounts only the
+   pulse, never the interactive zone subtree, and consecutive same-kind cues
+   retrigger by their batch sequence. */
+.game-status-pulse {
+  align-self: center;
+  width: 1.4rem;
+  height: 0.45rem;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.game-token-pulse {
+  width: 1.4rem;
+  height: 0.45rem;
+  border-radius: 2px;
+  background: var(--game-placeholder-ink);
+}
+
+.game-status-pulse[data-motion='protection-settle'] {
+  animation: motion-protection-settle 220ms ease-out;
+}
+
+.game-status-pulse[data-motion='protection-expire'] {
+  animation: motion-protection-expire 200ms ease-out;
+}
+
+.game-token-pulse[data-motion='token-settle'] {
+  animation: motion-token-settle 240ms ease-out;
+}
+
+.game-round-result-awards li[data-motion='token-settle'] {
+  animation: motion-token-settle 240ms ease-out;
+}
+
+/* The semantic victory-token rack: committed counts printed in text, each
+   token a pinned chip — readable without color, motion, or artwork. */
+.game-token-rack {
+  display: grid;
+  justify-items: start;
+  gap: 0.35rem;
+}
+
+.game-token-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.game-token-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--game-placeholder-ink);
+  padding: 0.05rem 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.game-token-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--game-placeholder-ink);
+}
+
+.game-token-total {
+  margin: 0;
+  font-size: 0.85rem;
 }
 
 .game-discard-count {
@@ -1008,7 +1153,8 @@ body {
 
   /* M8: every motion cue hook collapses to its final state. The resting state
      already equals the animated end state, so only the movement is removed —
-     final states and textual labels are fully preserved. */
+     final states and textual labels are fully preserved. The keyed status and
+     token pulse layers collapse exactly like every other hook. */
   [data-motion],
   [data-motion] .game-card-placeholder {
     animation: none !important;

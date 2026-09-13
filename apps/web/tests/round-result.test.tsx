@@ -8,7 +8,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
 import { createInitialGameState, gameReducer, type GameState } from '@/lib/game/game-reducer';
@@ -629,5 +629,133 @@ describe('round result reveal motion (M8)', () => {
     const ownHand = screen.getByRole('region', { name: 'Your hand' });
     expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
     expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
+  });
+});
+
+describe('round result token award cues (M8)', () => {
+  const SHARED_AWARD: GamePublicEvent[] = [
+    { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+    { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+    { type: 'TOKEN_AWARDED', playerId: OTHER_ID },
+    { type: 'ROUND_ENDED', winnerIds: [SELF_ID, OTHER_ID] },
+  ];
+
+  /** A post-award projection: both awarded seats' committed counts changed. */
+  function confirmingView(): PublicGameView {
+    return publicView({
+      players: [
+        {
+          id: SELF_ID,
+          name: 'Ana',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 3,
+          handCount: 1,
+          discards: [],
+        },
+        {
+          id: OTHER_ID,
+          name: 'Bruno',
+          connected: true,
+          eliminated: false,
+          protected: false,
+          victoryTokens: 1,
+          handCount: 2,
+          discards: [{ card: { value: 10, type: 'REY_GATO' }, origin: 'PLAYED' }],
+        },
+      ],
+    });
+  }
+
+  it('marks each award line with the one-shot token cue once the projected counts change', () => {
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={capturedState(SHARED_AWARD)}
+      />,
+    );
+    // Event-before-projection: the award batch is captured against the
+    // pre-award counts, so no cue is confirmed yet.
+    expect(container.querySelector('[data-motion="token-settle"]')).toBeNull();
+
+    // The confirming authoritative projection.
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={stateWithGame(
+          gameReducer(gameAfterEvents(SHARED_AWARD, liveGame()), {
+            type: 'game/public-state',
+            publicView: confirmingView(),
+          }),
+        )}
+      />,
+    );
+    const slip = screen.getByRole('status', { name: 'Round result' });
+    const awardLines = within(slip).getAllByRole('listitem');
+    expect(awardLines).toHaveLength(2);
+    for (const line of awardLines) {
+      expect(line).toHaveAttribute('data-motion', 'token-settle');
+      expect(line).toHaveAttribute('data-motion-sequence', '1');
+    }
+    // The addressed public racks carry the same committed-award cue.
+    expect(
+      container.querySelectorAll('.game-token-pulse[data-motion="token-settle"]'),
+    ).toHaveLength(2);
+  });
+
+  it("the stylesheet's award-line token rule actually reaches the rendered award lines", () => {
+    const { container, rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={capturedState(SHARED_AWARD)}
+      />,
+    );
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={stateWithGame(
+          gameReducer(gameAfterEvents(SHARED_AWARD, liveGame()), {
+            type: 'game/public-state',
+            publicView: confirmingView(),
+          }),
+        )}
+      />,
+    );
+    const awardLines = [...container.querySelectorAll('.game-round-result-awards li')];
+    expect(awardLines).toHaveLength(2);
+
+    // Selector-reach contract: parse every stylesheet rule carrying the token
+    // animation and require one whose selector matches the rendered award
+    // lines. Attribute presence alone never proves the animation starts.
+    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
+    const rules = [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((match) => ({ selector: match[1].trim(), body: match[2] }))
+      .filter(
+        (rule) =>
+          rule.selector.includes('token-settle') && rule.body.includes('motion-token-settle'),
+      );
+    const reaching = rules.filter((rule) =>
+      [...container.querySelectorAll(rule.selector)].some((node) =>
+        awardLines.includes(node as HTMLLIElement),
+      ),
+    );
+    expect(reaching).toHaveLength(1);
+  });
+
+  it('resolves every shared award by name and never renders a raw id', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={capturedState([
+          { type: 'TOKEN_AWARDED', playerId: 'p-ghost' },
+          { type: 'TOKEN_AWARDED', playerId: SELF_ID },
+          { type: 'ROUND_ENDED', winnerIds: [SELF_ID] },
+        ])}
+      />,
+    );
+    const slip = screen.getByRole('status', { name: 'Round result' });
+    expect(within(slip).getByText(/Ana earned 1 victory token/i)).toBeInTheDocument();
+    expect(slip.textContent).not.toContain('p-ghost');
   });
 });
