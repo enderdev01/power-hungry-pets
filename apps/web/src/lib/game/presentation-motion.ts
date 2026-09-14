@@ -646,9 +646,9 @@ export function discardOriginLabel(
 ): string | null {
   switch (origin) {
     case 'FORCED_PLAY':
-      return 'Forced face up';
+      return 'Forzada boca arriba';
     case 'ELIMINATION_REVEAL':
-      return 'Revealed by elimination';
+      return 'Revelada por eliminación';
     default:
       return null;
   }

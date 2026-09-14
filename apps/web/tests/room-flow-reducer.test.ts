@@ -71,7 +71,9 @@ describe('room-flow reducer', () => {
     expect(state.self).toEqual({ playerId: 'p-host', seatNumber: 1 });
     expect(state.busy).toBeNull();
     expect(state.pendingAttempt).toBeNull();
-    expect(state.notices.map((n) => n.text)).toEqual(['Room ABC12 is pinned. You host seat 1.']);
+    expect(state.notices.map((n) => n.text)).toEqual([
+      'La sala ABC12 está lista. Sos el anfitrión del asiento 1.',
+    ]);
     expect(state.notices[0].tone).toBe('success');
   });
 
@@ -86,7 +88,7 @@ describe('room-flow reducer', () => {
       rejoined: false,
     });
     expect(state.self).toEqual({ playerId: 'p-2', seatNumber: 2 });
-    expect(state.notices.map((n) => n.text)).toEqual(['You joined room ABC12 (seat 2).']);
+    expect(state.notices.map((n) => n.text)).toEqual(['Ingresaste a la sala ABC12 (asiento 2).']);
   });
 
   it('confirms a restored seat differently from a fresh join', () => {
@@ -99,7 +101,7 @@ describe('room-flow reducer', () => {
       membership: createdMembership(joined, 1),
       rejoined: true,
     });
-    expect(state.notices.map((n) => n.text)).toEqual(['Back in room ABC12 (seat 2).']);
+    expect(state.notices.map((n) => n.text)).toEqual(['Volviste a la sala ABC12 (asiento 2).']);
   });
 
   describe('room:updated lobby notices', () => {
@@ -109,24 +111,43 @@ describe('room-flow reducer', () => {
       membership: createdMembership(first),
     });
 
+    it('clears the finished match state when the room returns to its lobby', () => {
+      const finished = roomFlowReducer(withRoom, {
+        type: 'room/updated',
+        room: room([player(HOST)], { status: 'FINISHED' }),
+      });
+      const withResult = roomFlowReducer(finished, {
+        type: 'game/match-ended',
+        winners: ['p-host'],
+      });
+      expect(withResult.game.matchEnded).toBe(true);
+      const lobby = roomFlowReducer(withResult, {
+        type: 'room/updated',
+        room: room([player(HOST)]),
+      });
+      expect(lobby.room?.status).toBe('LOBBY');
+      expect(lobby.game.matchEnded).toBe(false);
+      expect(lobby.game.publicView).toBeNull();
+    });
+
     it('announces a newly arrived player', () => {
       const next = room([
         player(HOST),
         player({ playerId: 'p-2', displayName: 'Bruno', seatNumber: 2 }),
       ]);
       const state = roomFlowReducer(withRoom, { type: 'room/updated', room: next });
-      expect(state.notices.at(-1)?.text).toBe('Bruno arrived (seat 2).');
+      expect(state.notices.at(-1)?.text).toBe('Bruno llegó (asiento 2).');
     });
 
     it('announces away and back transport changes', () => {
       const away = room([{ ...player(HOST), connected: false }]);
       const awayState = roomFlowReducer(withRoom, { type: 'room/updated', room: away });
-      expect(awayState.notices.at(-1)?.text).toBe('Ana stepped away.');
+      expect(awayState.notices.at(-1)?.text).toBe('Ana se desconectó.');
       const back = roomFlowReducer(awayState, {
         type: 'room/updated',
         room: room([player(HOST)]),
       });
-      expect(back.notices.at(-1)?.text).toBe('Ana is back.');
+      expect(back.notices.at(-1)?.text).toBe('Ana volvió.');
     });
 
     it('announces a host transfer', () => {
@@ -144,7 +165,7 @@ describe('room-flow reducer', () => {
           { playerId: 'p-2', displayName: 'Bruno', seatNumber: 2, isHost: true, joinedAt: 1 },
         ]),
       });
-      expect(state.notices.at(-1)?.text).toBe('Bruno now hosts the room.');
+      expect(state.notices.at(-1)?.text).toBe('Bruno ahora es el anfitrión de la sala.');
     });
 
     it('announces a leaving player', () => {
@@ -159,7 +180,7 @@ describe('room-flow reducer', () => {
         type: 'room/updated',
         room: room([player(HOST)]),
       });
-      expect(after.notices.at(-1)?.text).toBe('Bruno left the room.');
+      expect(after.notices.at(-1)?.text).toBe('Bruno salió de la sala.');
     });
 
     it('announces the match start on the status transition', () => {
@@ -167,7 +188,7 @@ describe('room-flow reducer', () => {
         type: 'room/updated',
         room: room([player(HOST)], { status: 'IN_MATCH' }),
       });
-      expect(state.notices.at(-1)?.text).toBe('The match has started.');
+      expect(state.notices.at(-1)?.text).toBe('La partida comenzó.');
     });
 
     it('stays quiet when the snapshot has no visible change', () => {
@@ -199,7 +220,7 @@ describe('room-flow reducer', () => {
       action: 'join',
       code: 'ROOM_FULL',
       message: 'room ABC12 is full',
-      sentence: expect.stringContaining('6 players'),
+      sentence: expect.stringContaining('6 jugadores'),
       recovery: 'edit-input',
     });
     expect(state.notices.at(-1)?.tone).toBe('error');
@@ -246,7 +267,7 @@ describe('room-flow reducer', () => {
     expect(state.room).not.toBeNull();
     expect(state.self).not.toBeNull();
     expect(state.notices.at(-1)?.tone).toBe('error');
-    expect(state.notices.at(-1)?.text).toContain('Connection lost');
+    expect(state.notices.at(-1)?.text).toContain('Se perdió la conexión');
   });
 
   it('announces the transport coming back online', () => {
@@ -256,7 +277,7 @@ describe('room-flow reducer', () => {
     });
     const state = roomFlowReducer(down, { type: 'connection/status', status: 'connected' });
     expect(state.connection).toBe('connected');
-    expect(state.notices.at(-1)?.text).toContain('Connected');
+    expect(state.notices.at(-1)?.text).toContain('Conectado');
     expect(state.notices.at(-1)?.tone).toBe('success');
   });
 
@@ -269,7 +290,7 @@ describe('room-flow reducer', () => {
     expect(state.room).toBeNull();
     expect(state.roomCode).toBeNull();
     expect(state.self).toBeNull();
-    expect(state.notices.at(-1)?.text).toContain('You left room ABC12');
+    expect(state.notices.at(-1)?.text).toContain('Saliste de la sala ABC12');
   });
 
   it('never reuses a notice id', () => {

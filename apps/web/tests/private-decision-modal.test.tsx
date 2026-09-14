@@ -10,6 +10,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PrivateDecisionModal } from '@/components/game/private-decision-modal';
 import type { PendingDecisionModel } from '@/lib/game/pending-decision';
+import type { CardAssetConfig } from '@/lib/game/asset-resolver';
+import { TABLETOP_ASSET_CONFIG } from '@/lib/game/card-assets';
 import type { FlowError } from '@/lib/room-flow/reducer';
 import type { GameCardInstance } from '@power-hungry-pets/protocol';
 import { OTHER_ID } from './helpers/game-views';
@@ -55,6 +57,7 @@ function renderModal(
     busy?: boolean;
     callbacks?: Callbacks;
     error?: FlowError | null;
+    assetConfig?: CardAssetConfig;
   } = {},
 ): Callbacks {
   const cb = overrides.callbacks ?? callbacks();
@@ -65,6 +68,7 @@ function renderModal(
         hand={overrides.hand !== undefined ? overrides.hand : OWN_HAND}
         busy={overrides.busy ?? false}
         error={overrides.error}
+        assetConfig={overrides.assetConfig}
         onChooseTarget={cb.onChooseTarget}
         onSubmitGuess={cb.onSubmitGuess}
         onChooseHiddenSwap={cb.onChooseHiddenSwap}
@@ -154,7 +158,7 @@ describe('private decision modal: mandatory shell', () => {
 
   it('renders the truthful waiting state with no controls for a stale decision', () => {
     renderModal({ kind: 'unavailable' });
-    expect(screen.getByRole('status')).toHaveTextContent(/waiting/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/esperando/i);
     const dialog = screen.getByRole('dialog');
     expect(dialog.querySelectorAll('button')).toHaveLength(0);
   });
@@ -178,7 +182,7 @@ describe('private decision modal: focus trap edge cases', () => {
       kind: 'choose-target',
       targets: [{ targetId: OTHER_ID, name: 'Bruno' }],
     });
-    const only = screen.getByRole('button', { name: 'Choose Bruno' });
+    const only = screen.getByRole('button', { name: 'Elegir a Bruno' });
     expect(only).toHaveFocus();
     // Tab past the only control wraps back to it; Shift+Tab before it does too.
     await userEvent.tab();
@@ -197,10 +201,10 @@ describe('private decision modal: Pecera target stage', () => {
         { targetId: 'p-third', name: 'Caro' },
       ],
     });
-    await userEvent.click(screen.getByRole('button', { name: 'Choose Bruno' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Elegir a Bruno' }));
     expect(cb.onChooseTarget).toHaveBeenCalledTimes(1);
     expect(cb.onChooseTarget).toHaveBeenCalledWith(OTHER_ID);
-    expect(screen.getByRole('button', { name: 'Choose Caro' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Elegir a Caro' })).toBeInTheDocument();
   });
 
   it('disables every choice while a command is in flight', () => {
@@ -208,7 +212,7 @@ describe('private decision modal: Pecera target stage', () => {
       { kind: 'choose-target', targets: [{ targetId: OTHER_ID, name: 'Bruno' }] },
       { busy: true },
     );
-    expect(screen.getByRole('button', { name: 'Choose Bruno' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Elegir a Bruno' })).toBeDisabled();
   });
 });
 
@@ -220,13 +224,27 @@ describe('private decision modal: Pecera guess stage', () => {
       targetName: 'Bruno',
       values: [0, 2, 3, 10],
     });
-    expect(screen.getByRole('button', { name: 'Guess 0' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Guess 10' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apostar 0' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Apostar 10' })).toBeInTheDocument();
     // The prohibited value 1 is never invented by the client.
-    expect(screen.queryByRole('button', { name: 'Guess 1' })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: 'Guess 3' }));
+    expect(screen.queryByRole('button', { name: 'Apostar 1' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Apostar 3' }));
     expect(cb.onSubmitGuess).toHaveBeenCalledTimes(1);
     expect(cb.onSubmitGuess).toHaveBeenCalledWith(3);
+  });
+
+  it('shows unpublished catalog values as inert, labelled tiles that are never choices', () => {
+    renderModal({
+      kind: 'submit-guess',
+      targetId: OTHER_ID,
+      targetName: 'Bruno',
+      values: [0, 2, 3, 10],
+    });
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('1 no disponible')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /no disponible/ })).toBeNull();
+    // Exactly the published values are buttons.
+    expect(within(dialog).getAllByRole('button', { name: /^Apostar \d+$/ })).toHaveLength(4);
   });
 
   it('names the guessed player from the public roster when resolvable', () => {
@@ -258,11 +276,11 @@ describe('private decision modal: Saqueadog swap stage', () => {
       keepAllowed: true,
       swapAllowed: true,
     });
-    expect(screen.getByLabelText(/Saqueadog de Tumbas, value 6/i)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Keep my card' }));
+    expect(screen.getByLabelText(/Saqueadog de Tumbas, valor 6/i)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Conservar mi carta' }));
     expect(cb.onChooseHiddenSwap).toHaveBeenCalledWith(false);
 
-    await userEvent.click(screen.getByRole('button', { name: 'Swap with the hidden card' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cambiar por la carta oculta' }));
     expect(cb.onChooseHiddenSwap).toHaveBeenCalledWith(true);
     expect(cb.onChooseHiddenSwap).toHaveBeenCalledTimes(2);
   });
@@ -274,7 +292,7 @@ describe('private decision modal: Saqueadog swap stage', () => {
       keepAllowed: true,
       swapAllowed: true,
     });
-    expect(screen.getByLabelText(/Malabarista de Ocho Patas, value 7/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Malabarista de Ocho Patas, valor 7/i)).toBeInTheDocument();
   });
 
   it('offers only the swap answers the server published', () => {
@@ -284,8 +302,8 @@ describe('private decision modal: Saqueadog swap stage', () => {
       keepAllowed: true,
       swapAllowed: false,
     });
-    expect(screen.getByRole('button', { name: 'Keep my card' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Swap with the hidden card' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Conservar mi carta' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cambiar por la carta oculta' })).toBeNull();
   });
 });
 
@@ -296,12 +314,12 @@ describe('private decision modal: Ratón reinsertion stage', () => {
       card: INSPECTED_CARD,
       positions: [0, 1, 2],
     });
-    expect(screen.getByLabelText(/Ratón Trampero, value 2/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Top of the draw pile' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Slot 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Bottom of the draw pile' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Ratón Trampero, valor 2/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Parte superior del mazo' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Posición 1' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Parte inferior del mazo' })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Slot 1' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Posición 1' }));
     expect(cb.onChooseDeckPosition).toHaveBeenCalledTimes(1);
     expect(cb.onChooseDeckPosition).toHaveBeenCalledWith(1);
   });
@@ -312,8 +330,8 @@ describe('private decision modal: Ratón reinsertion stage', () => {
       card: INSPECTED_CARD,
       positions: [0],
     });
-    expect(screen.getByRole('button', { name: 'Top of the draw pile' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Bottom of the draw pile' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Parte superior del mazo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Parte inferior del mazo' })).toBeNull();
   });
 });
 
@@ -323,7 +341,7 @@ describe('private decision modal: focus contract', () => {
       kind: 'choose-target',
       targets: [{ targetId: OTHER_ID, name: 'Bruno' }],
     });
-    expect(screen.getByRole('button', { name: 'Choose Bruno' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Elegir a Bruno' })).toHaveFocus();
   });
 
   it('traps Tab focus inside the dialog', async () => {
@@ -349,7 +367,7 @@ describe('private decision modal: focus contract', () => {
       return (
         <>
           <button type="button" data-testid="gameplay-trigger">
-            Draw a card
+            Robar una carta
           </button>
           {withModal && (
             <PrivateDecisionModal
@@ -372,7 +390,7 @@ describe('private decision modal: focus contract', () => {
     // The gameplay element holds focus when the projection opens the modal.
     screen.getByTestId('gameplay-trigger').focus();
     rerender(<TableShell withModal />);
-    expect(screen.getByRole('button', { name: 'Choose Bruno' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Elegir a Bruno' })).toHaveFocus();
     // The decision resolves: the modal unmounts and focus returns to gameplay.
     rerender(<TableShell withModal={false} />);
     expect(screen.getByTestId('gameplay-trigger')).toHaveFocus();
@@ -387,7 +405,7 @@ describe('private decision modal: focus contract', () => {
           <div ref={tableRef} data-testid="table-shell" tabIndex={-1}>
             {withTrigger && (
               <button type="button" data-testid="gameplay-trigger">
-                Draw a card
+                Robar una carta
               </button>
             )}
           </div>
@@ -426,7 +444,7 @@ describe('private decision modal: focus contract', () => {
       return (
         <>
           <button type="button" data-testid="gameplay-trigger">
-            Draw a card
+            Robar una carta
           </button>
           {stage !== 'resolved' && (
             <PrivateDecisionModal
@@ -456,14 +474,14 @@ describe('private decision modal: focus contract', () => {
     // The gameplay element holds focus when the projection opens the modal.
     screen.getByTestId('gameplay-trigger').focus();
     rerender(<StageShell stage="target" />);
-    expect(screen.getByRole('button', { name: 'Choose Bruno' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Elegir a Bruno' })).toHaveFocus();
 
     // The server advances the mandatory decision in place (PECERA_TARGET →
     // PECERA_GUESS): the old control unmounts, and the first control of the
     // new stage must take focus immediately — never the body, never a stale
     // control, and never the inert table.
     rerender(<StageShell stage="guess" />);
-    expect(screen.getByRole('button', { name: 'Guess 0' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Apostar 0' })).toHaveFocus();
 
     // The pre-modal focus is still reserved: when the decision finally
     // resolves, focus returns to the element held before the modal opened.
@@ -486,16 +504,16 @@ describe('private decision modal: in-modal error surface', () => {
         error: {
           action: 'choose-hidden-swap',
           code: 'ENGINE_REJECTED',
-          message: 'The game rules rejected that move.',
-          sentence: 'The game rules rejected that move.',
+          message: 'Las reglas del juego rechazaron ese movimiento.',
+          sentence: 'Las reglas del juego rechazaron ese movimiento.',
           recovery: 'retry',
         },
       },
     );
     const dialog = screen.getByRole('dialog');
     const alert = within(dialog).getByRole('alert');
-    expect(alert).toHaveTextContent(/The game rules rejected that move/i);
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    expect(alert).toHaveTextContent(/Las reglas del juego rechazaron ese movimiento/i);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Intentar de nuevo' }));
     expect(cb.onRetry).toHaveBeenCalledTimes(1);
   });
 
@@ -511,20 +529,45 @@ describe('private decision modal: in-modal error surface', () => {
         error: {
           action: 'choose-hidden-swap',
           code: 'ENGINE_REJECTED',
-          message: 'The game rules rejected that move.',
-          sentence: 'The game rules rejected that move.',
+          message: 'Las reglas del juego rechazaron ese movimiento.',
+          sentence: 'Las reglas del juego rechazaron ese movimiento.',
           recovery: 'none',
         },
       },
     );
     expect(within(screen.getByRole('dialog')).getByRole('alert')).toHaveTextContent(
-      /The game rules rejected that move/i,
+      /Las reglas del juego rechazaron ese movimiento/i,
     );
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Intentar de nuevo' })).toBeNull();
   });
 
   it('renders no alert when the table reports no failure', () => {
     renderModal({ kind: 'choose-target', targets: [{ targetId: OTHER_ID, name: 'Bruno' }] });
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+});
+
+describe('private decision modal: tabletop presentation', () => {
+  it('shows the already-public source card art as a decorative emblem', () => {
+    renderModal(
+      { kind: 'choose-target', targets: [{ targetId: OTHER_ID, name: 'Bruno' }] },
+      { assetConfig: TABLETOP_ASSET_CONFIG },
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveAttribute('data-decision', 'choose-target');
+    const emblem = dialog.querySelector('.game-modal-emblem');
+    expect(emblem).toHaveAttribute('aria-hidden', 'true');
+    expect(emblem?.querySelector('img')?.getAttribute('src')).toBe(
+      TABLETOP_ASSET_CONFIG.images['card/pecera-de-cristal'],
+    );
+  });
+
+  it('renders private cards with the same canonical art as the table', () => {
+    renderModal(
+      { kind: 'choose-deck-position', card: { value: 10, type: 'REY_GATO' }, positions: [0, 1] },
+      { assetConfig: TABLETOP_ASSET_CONFIG },
+    );
+    const card = screen.getByLabelText(/Rey Gato, valor 10/);
+    expect(card).toHaveAttribute('data-art-kind', 'image');
   });
 });

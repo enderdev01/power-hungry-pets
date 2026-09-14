@@ -69,6 +69,11 @@ export interface LeaveRoomAck {
   room: RoomSnapshot | null;
 }
 
+export interface ReturnToLobbyAck {
+  /** The same room back at LOBBY with its seats. */
+  room: RoomSnapshot;
+}
+
 export type ConnectionEvent = 'connected' | 'disconnected' | 'connecting';
 
 /** Transport seam every room-flow interaction goes through. */
@@ -84,6 +89,8 @@ export interface RoomFlowGateway {
   startMatch(input: { code: string }): Promise<StartMatchAck>;
   sendGameCommand(input: { code: string; command: TurnCommand }): Promise<GameCommandAck>;
   leaveRoom(input: { code: string }): Promise<LeaveRoomAck>;
+  /** Brings a finished room back to its lobby (optional for legacy test seams). */
+  returnToLobby?(input: { code: string }): Promise<ReturnToLobbyAck>;
   onRoomUpdated(callback: (room: RoomSnapshot) => void): () => void;
   onConnectionChange(callback: (status: ConnectionEvent) => void): () => void;
   /** Subscribes to the shared public game projection for the seated room. */
@@ -197,6 +204,8 @@ export interface RoomFlowController {
   chooseDeckPosition(index: number): Promise<boolean>;
   /** Leaves the room this tab is seated in and clears its storage. */
   leaveRoom(): Promise<boolean>;
+  /** Brings the finished room back to its lobby for every seat. */
+  returnToLobby(): Promise<boolean>;
   /** Replays the pending attempt after a recoverable failure. */
   retry(): Promise<boolean>;
   clearError(): void;
@@ -538,6 +547,31 @@ export function createRoomFlowController(
       }
     },
 
+    async returnToLobby(): Promise<boolean> {
+      const code = state.roomCode;
+      const intentRevision = roomIntentRevision;
+      if (code === null || gateway.returnToLobby === undefined) {
+        return false;
+      }
+      dispatch({ type: 'busy/started', action: 'return-lobby' });
+      try {
+        const ack = await gateway.returnToLobby({ code });
+        if (intentRevision !== roomIntentRevision || state.roomCode !== code) {
+          return false;
+        }
+        dispatch({ type: 'room/updated', room: ack.room });
+        dispatch({ type: 'busy/cleared' });
+        return true;
+      } catch (error) {
+        if (intentRevision !== roomIntentRevision || state.roomCode !== code) {
+          return false;
+        }
+        const ackError = asAckError(error);
+        fail({ action: 'return-lobby', code }, ackError.code, ackError.message);
+        return false;
+      }
+    },
+
     async drawCard(): Promise<boolean> {
       const actorId = state.self?.playerId;
       if (actorId === undefined) {
@@ -661,6 +695,8 @@ export function createRoomFlowController(
           return controller.startMatch();
         case 'leave':
           return controller.leaveRoom();
+        case 'return-lobby':
+          return controller.returnToLobby();
         case 'draw':
           return controller.drawCard();
         case 'play':

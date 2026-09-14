@@ -79,13 +79,21 @@ describe('motion cue derivation', () => {
       lastBatch: { sequence: 4, cues: [{ kind: 'card-drawn', playerId: 'p-self' }] },
     };
     const unsupportedOnly: GamePublicEvent[] = [
-      { type: 'PECERA_GUESS_RESOLVED', actorId: 'a', targetId: 'b', correct: true },
       { type: 'HANDS_REVEALED', hands: [] },
       { type: 'ROUND_ENDED', winnerIds: ['a'] },
       { type: 'MATCH_ENDED', winnerIds: ['a'] },
     ];
 
     expect(deriveMotionCues(prev, unsupportedOnly)).toBe(prev);
+  });
+
+  it('derives a public Pecera outcome cue without any guessed value', () => {
+    const next = deriveMotionCues(createInitialMotionCueState(), [
+      { type: 'PECERA_GUESS_RESOLVED', actorId: 'a', targetId: 'b', correct: false },
+    ]);
+    expect(next.lastBatch?.cues).toEqual([
+      { kind: 'pecera-resolved', actorId: 'a', targetId: 'b', correct: false },
+    ]);
   });
 
   it('treats an empty batch as no motion and keeps the previous state', () => {

@@ -6,7 +6,7 @@
  * public fields (player ids, published card values/types) are carried, and no
  * cue ever carries instance identity, guesses, indexes, swap choices, or
  * inferred card identity/targets. Events whose evidence the current M8 slice
- * does not need (Pecera resolution, exhaustion reveals, round/match end) are
+ * does not need (exhaustion reveals, round/match end) are
  * unsupported here and produce no cue — so an unsupported-only batch cannot
  * create false motion.
  *
@@ -31,7 +31,8 @@ export type MotionCue =
   | { kind: 'protection-activated'; playerId: string }
   | { kind: 'protection-expired'; playerId: string }
   | { kind: 'player-eliminated'; playerId: string }
-  | { kind: 'token-awarded'; playerId: string };
+  | { kind: 'token-awarded'; playerId: string }
+  | { kind: 'pecera-resolved'; actorId: string; targetId: string; correct: boolean };
 
 /**
  * Reducer-owned motion-cue state: a monotonic sequence that advances exactly
@@ -154,6 +155,19 @@ function toCue(event: unknown): MotionCue | null {
       return typeof playerId === 'string' ? { kind: 'protection-expired', playerId } : null;
     case 'PLAYER_ELIMINATED':
       return typeof playerId === 'string' ? { kind: 'player-eliminated', playerId } : null;
+    case 'PECERA_GUESS_RESOLVED':
+      // Public outcome only: who guessed whom and whether it hit. The guessed
+      // value is never part of the public event.
+      return typeof event.actorId === 'string' &&
+        typeof event.targetId === 'string' &&
+        typeof event.correct === 'boolean'
+        ? {
+            kind: 'pecera-resolved',
+            actorId: event.actorId,
+            targetId: event.targetId,
+            correct: event.correct,
+          }
+        : null;
     case 'TOKEN_AWARDED':
       return typeof playerId === 'string' ? { kind: 'token-awarded', playerId } : null;
     default:

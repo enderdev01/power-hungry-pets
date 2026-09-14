@@ -150,7 +150,7 @@ describe('round result capture (WU9)', () => {
     expect(captured.roundResult).toBeNull();
   });
 
-  it('clears the visible result when the next gameplay event batch arrives', () => {
+  it('keeps the visible result when the next gameplay event batch arrives', () => {
     let state = gameReducer(createInitialGameState(), {
       type: 'game/public-state',
       publicView: publicView(),
@@ -165,7 +165,7 @@ describe('round result capture (WU9)', () => {
       type: 'game/events',
       events: [{ type: 'CARD_DRAWN', playerId: 'p-other' }],
     });
-    expect(state.roundResult).toBeNull();
+    expect(state.roundResult).not.toBeNull();
   });
 
   it('does not clear the result when only fresh projections arrive', () => {

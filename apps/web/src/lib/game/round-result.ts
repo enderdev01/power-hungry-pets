@@ -169,16 +169,24 @@ export function captureRoundResultEvidence(
 /**
  * The game reducer's round-result transition for one `game/events` batch: a
  * fresh ROUND_ENDED batch (without MATCH_ENDED) captures and re-arms the
- * result; any other batch means actual gameplay resumed and clears a visible
+ * result; ordinary gameplay batches keep a visible
  * result. Projection-only actions never reach this function, so the server's
  * immediate post-result fanout cannot erase a result before it is seen.
  */
 export function nextRoundResult(
-  _current: RoundResultEvidence | null,
+  current: RoundResultEvidence | null,
   events: GamePublicEvent[],
   preBatchPublicView: PublicGameView | null,
 ): RoundResultEvidence | null {
-  return captureRoundResultEvidence(events, roundNumberOf(preBatchPublicView));
+  const captured = captureRoundResultEvidence(events, roundNumberOf(preBatchPublicView));
+  if (captured !== null) {
+    return captured;
+  }
+  // A match-ending batch hands over to the match result. Ordinary gameplay
+  // batches (for example the next round's first draw) keep the result until
+  // the viewer dismisses it, so a fast next turn can never erase it unseen.
+  const matchEnded = Array.isArray(events) && events.some((event) => event.type === 'MATCH_ENDED');
+  return matchEnded ? null : current;
 }
 
 /**
@@ -260,6 +268,6 @@ export function evaluateRoundResult(
 /** Human sentence for the round's ending reason; no hand is ever promised. */
 export function roundResultReasonSentence(reason: RoundResultReason): string {
   return reason === 'exhaustion'
-    ? 'The draw pile ran out — the remaining hands were revealed.'
-    : 'The last survivor took the round.';
+    ? 'El mazo se agotó y se revelaron las manos restantes.'
+    : 'El último sobreviviente ganó la ronda.';
 }

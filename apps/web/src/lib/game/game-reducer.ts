@@ -70,9 +70,9 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
         ...state,
         recentEvents: [...state.recentEvents, ...action.events].slice(-GAME_EVENT_LOG_LIMIT),
         // WU9: a ROUND_ENDED batch (without MATCH_ENDED) captures and re-arms
-        // the round result; any other event batch means actual gameplay
-        // resumed and clears it. Projections alone never touch it, so the
-        // server's immediate post-result fanout cannot erase the slip.
+        // the round result; later gameplay batches keep it until the viewer
+        // dismisses it (a MATCH_ENDED batch hands over to the match result).
+        // Projections alone never touch it.
         roundResult: nextRoundResult(state.roundResult, action.events, state.publicView),
         // M8 WU1: motion cues derive from the same atomic batch; batches
         // without supported cues return the previous state unchanged.

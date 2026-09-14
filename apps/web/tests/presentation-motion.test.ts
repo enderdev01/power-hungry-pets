@@ -1110,8 +1110,8 @@ describe('zone targeting helpers', () => {
 
 describe('origin labels', () => {
   it('labels forced and elimination-reveal discards and stays silent about played cards', () => {
-    expect(discardOriginLabel('FORCED_PLAY')).toBe('Forced face up');
-    expect(discardOriginLabel('ELIMINATION_REVEAL')).toBe('Revealed by elimination');
+    expect(discardOriginLabel('FORCED_PLAY')).toBe('Forzada boca arriba');
+    expect(discardOriginLabel('ELIMINATION_REVEAL')).toBe('Revelada por eliminación');
     expect(discardOriginLabel('PLAYED')).toBeNull();
   });
 });
@@ -1236,8 +1236,6 @@ describe('motion stylesheet contract (static source)', () => {
     'motion-draw-settle',
     'motion-card-landing',
     'motion-card-flip',
-    'motion-stage-landing',
-    'motion-stage-flip',
     'motion-hand-shuffle',
     'motion-hand-exchange',
     'motion-effect-settle',
@@ -1284,39 +1282,28 @@ describe('motion stylesheet contract (static source)', () => {
     }
   });
 
-  it('keeps every motion duration inside the 180–320ms band and never loops', () => {
-    const animations = [...css.matchAll(/animation:\s*(motion-[a-z-]+)\s+(\d+)ms/g)];
+  it('keeps one-shot cue durations inside the docs/14 bands and loops only ambient cues', () => {
+    const animations = [...css.matchAll(/animation:\s*(motion-[a-z-]+)\s+(\d+)ms([^;]*);/g)];
     const names = animations.map((match) => match[1]);
     for (const name of KEYFRAMES) {
       expect(names).toContain(name);
     }
-    for (const match of animations) {
-      const duration = Number(match[2]);
-      expect(duration).toBeGreaterThanOrEqual(180);
-      expect(duration).toBeLessThanOrEqual(320);
-    }
-    expect(css).not.toContain('infinite');
-  });
-
-  it('returns the center stage to opacity 0 with stage-specific keyframes', () => {
-    // The stage overlay stays mounted between batches, so its own keyframes
-    // must end back at the base opacity 0 — the destination keyframes end
-    // visible and are never reused for the stage.
-    for (const name of ['motion-stage-landing', 'motion-stage-flip']) {
-      const body = extractBlock(css, `@keyframes ${name}`);
-      expect(body).not.toBe('');
-      const to = body.slice(body.indexOf('to'));
-      expect(to).toMatch(/opacity:\s*0/);
-      expect(to).toMatch(/transform:\s*none/);
-    }
-    // Every stage animation rule consumes only its stage keyframes.
-    const stageAnimations = [...css.matchAll(/\.game-center-stage[^{}]*\{([^{}]*)\}/g)]
-      .map((match) => match[1])
-      .filter((body) => body.includes('animation'));
-    expect(stageAnimations.length).toBe(2);
-    for (const body of stageAnimations) {
-      expect(body).toMatch(/motion-stage-(landing|flip)/);
-      expect(body).not.toMatch(/motion-card-(landing|flip)/);
+    const AMBIENT = ['motion-turn-halo', 'motion-deck-ready'];
+    for (const [, name, duration, rest] of animations) {
+      if (name === 'motion-announce') {
+        // An announcement holds long enough to read, then fades on its own.
+        expect(Number(duration)).toBeLessThanOrEqual(3000);
+        continue;
+      }
+      if (AMBIENT.includes(name!)) {
+        // Low-priority ambient cues are slow and soft (docs/14 "Current turn").
+        expect(Number(duration)).toBeGreaterThanOrEqual(1500);
+        continue;
+      }
+      // Micro feedback (120ms) up to round-win emphasis (1000ms); never looped.
+      expect(Number(duration)).toBeGreaterThanOrEqual(120);
+      expect(Number(duration)).toBeLessThanOrEqual(1000);
+      expect(rest).not.toContain('infinite');
     }
   });
 
@@ -1336,7 +1323,7 @@ describe('motion stylesheet contract (static source)', () => {
   it('scopes the persistent-state styles to existing hooks without color-only meaning', () => {
     // The protection badge is a text-bearing pin marker, not a color switch.
     expect(css).toContain('.game-status-badge');
-    expect(css).toContain('.game-status-pin');
+    expect(css).toContain('.game-status-icon');
     // The forced-play shell is strengthened structurally (border weight),
     // never by hue alone.
     expect(css).toContain(".game-discard-slot[data-forced='true']");

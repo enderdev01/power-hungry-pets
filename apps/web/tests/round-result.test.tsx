@@ -100,11 +100,11 @@ describe('round result slip presentation (WU9)', () => {
         state={capturedState(SINGLE_WIN)}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(slip).toHaveTextContent(/Round 1 is over/i);
-    expect(slip).toHaveTextContent(/Ana wins the round\./i);
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(slip).toHaveTextContent(/Terminó la ronda 1/i);
+    expect(slip).toHaveTextContent(/Ana gana la ronda\./i);
     // Honest exhaustion copy: no winning-hand promise for a last-survivor round.
-    expect(slip).toHaveTextContent(/last survivor/i);
+    expect(slip).toHaveTextContent(/último sobreviviente/i);
   });
 
   it('uses honest copy when the ended round number is unknown', () => {
@@ -112,9 +112,9 @@ describe('round result slip presentation (WU9)', () => {
     // carries no round number, so the copy stays honest.
     const state = stateWithGame(gameAfterEvents(SINGLE_WIN, liveGame(publicView({ round: null }))));
     render(<GameTable controller={controllerStub() as RoomFlowController} state={state} />);
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(slip).toHaveTextContent(/The round is over/i);
-    expect(slip).not.toHaveTextContent(/Round \d+ is over/i);
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(slip).toHaveTextContent(/La ronda terminó/i);
+    expect(slip).not.toHaveTextContent(/Terminó la ronda \d+/i);
   });
 
   it('uses shared-win wording when the server announced several winners', () => {
@@ -124,8 +124,8 @@ describe('round result slip presentation (WU9)', () => {
         state={capturedState(SHARED_WIN)}
       />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toHaveTextContent(
-      /Ana and Bruno share the round\./i,
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toHaveTextContent(
+      /Ana y Bruno comparten la victoria de la ronda\./i,
     );
   });
 
@@ -193,8 +193,8 @@ describe('round result slip presentation (WU9)', () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={stateWithGame(game)} />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toHaveTextContent(
-      /Ana earned 2 victory tokens \u2014 now 3\./i,
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toHaveTextContent(
+      /Ana obtuvo 2 fichas de victoria \u2014 ahora tiene 3\./i,
     );
   });
 
@@ -226,9 +226,9 @@ describe('round result slip presentation (WU9)', () => {
         state={capturedState(events, preAward)}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(slip).toHaveTextContent(/Ana earned 2 victory tokens\./i);
-    expect(slip).not.toHaveTextContent(/now \d/i);
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(slip).toHaveTextContent(/Ana obtuvo 2 fichas de victoria\./i);
+    expect(slip).not.toHaveTextContent(/ahora tiene \d/i);
   });
 
   it('reads the exhaustion reason and reveal cards only from HANDS_REVEALED', () => {
@@ -248,8 +248,8 @@ describe('round result slip presentation (WU9)', () => {
         state={capturedState(events)}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(slip).toHaveTextContent(/The draw pile ran out/i);
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(slip).toHaveTextContent(/El mazo se agotó/i);
     expect(slip).toHaveTextContent(/Robot Aspirador Real/i);
     expect(slip).toHaveTextContent(/Ana/i);
     // Fail-closed: an unknown reveal player is dropped, never rendered as a raw id.
@@ -272,8 +272,8 @@ describe('round result slip presentation (WU9)', () => {
     );
     // Positive anchor: the slip is actually present and rendering, so the
     // raw-id absences below are meaningful and not vacuous.
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(slip).toHaveTextContent(/Round 1 is over/i);
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(slip).toHaveTextContent(/Terminó la ronda 1/i);
     expect(container.textContent).not.toContain('p-ghost');
     expect(container.textContent).not.toContain('instance');
   });
@@ -322,8 +322,8 @@ describe('round result slip presentation (WU9)', () => {
         state={capturedState(events, threeSeat)}
       />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toHaveTextContent(
-      /Ana, Bruno and Caro share the round\./i,
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toHaveTextContent(
+      /Ana, Bruno y Caro comparten la victoria de la ronda\./i,
     );
   });
 
@@ -342,11 +342,11 @@ describe('round result slip presentation (WU9)', () => {
       />,
     );
     expect(container.querySelector('.game-table')).not.toHaveAttribute('inert');
-    const slip = screen.getByRole('status', { name: 'Round result' });
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
     expect(slip).not.toHaveAttribute('aria-modal');
     expect(screen.queryByRole('dialog')).toBeNull();
     // The next round remains playable while the slip is visible.
-    expect(screen.getByRole('button', { name: 'Draw a card' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Robar una carta' })).toBeEnabled();
   });
 
   it('dismisses on Continue locally and sends no game command', async () => {
@@ -355,15 +355,15 @@ describe('round result slip presentation (WU9)', () => {
     const { rerender } = render(
       <GameTable controller={controller as RoomFlowController} state={state} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
     Object.values(controller as unknown as Record<string, jest.Mock>).forEach((spy) =>
       expect(spy).not.toHaveBeenCalled(),
     );
     // Dismissal is local state: re-rendering the same captured state must not
     // resurrect the dismissed slip.
     rerender(<GameTable controller={controller as RoomFlowController} state={state} />);
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
   });
 
   it('re-arms a later ROUND_ENDED batch after an explicit dismissal', async () => {
@@ -371,8 +371,8 @@ describe('round result slip presentation (WU9)', () => {
     const { rerender } = render(
       <GameTable controller={controller} state={capturedState(SINGLE_WIN)} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
 
     rerender(
       <GameTable
@@ -380,8 +380,8 @@ describe('round result slip presentation (WU9)', () => {
         state={stateWithGame(gameAfterEvents(SHARED_WIN, liveGame(laterRoundView())))}
       />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toHaveTextContent(
-      /Ana and Bruno share the round\./i,
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toHaveTextContent(
+      /Ana y Bruno comparten la victoria de la ronda\./i,
     );
   });
 
@@ -390,8 +390,8 @@ describe('round result slip presentation (WU9)', () => {
     const { rerender } = render(
       <GameTable controller={controller} state={capturedState(SINGLE_WIN)} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
 
     // Room cleared and a later round ended again: a fresh evidence object
     // re-arms the slip even after the earlier dismissal.
@@ -401,7 +401,7 @@ describe('round result slip presentation (WU9)', () => {
         state={stateWithGame(gameAfterEvents(SINGLE_WIN, liveGame(laterRoundView())))}
       />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toBeInTheDocument();
   });
 
   it('coexists with the WU8 mandatory decision modal without changing its behavior', () => {
@@ -434,7 +434,7 @@ describe('round result slip presentation (WU9)', () => {
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // The slip is hidden (not discarded) while the modal owns the interaction:
     // its Continue is never visible-but-inert behind the modal.
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
   });
 
   it('shows the hidden slip again once the mandatory modal closes, if the evidence remains', () => {
@@ -463,7 +463,7 @@ describe('round result slip presentation (WU9)', () => {
         state={stateWithGame(gameAfterEvents(SINGLE_WIN, withSwap))}
       />,
     );
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
 
     // The modal resolves; the still-captured evidence re-reveals the slip.
     rerender(
@@ -472,7 +472,7 @@ describe('round result slip presentation (WU9)', () => {
         state={stateWithGame(gameAfterEvents(SINGLE_WIN, liveGame()))}
       />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toBeInTheDocument();
   });
 
   it('suppresses the slip entirely when the match has ended (WU10 owns that presentation)', () => {
@@ -497,11 +497,11 @@ describe('round result slip presentation (WU9)', () => {
     );
     // No round-result slip: a match-ending batch never captures a result, and
     // WU10's match presentation owns this end state.
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
-    expect(screen.getByRole('status', { name: 'Match result' })).toBeInTheDocument();
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
+    expect(screen.getByRole('status', { name: 'Resultado de la partida' })).toBeInTheDocument();
   });
 
-  it('auto-clears when the next gameplay event batch arrives, but not on a new projection', () => {
+  it('stays until Continue even when the next round already started playing', async () => {
     let game = gameAfterEvents(SINGLE_WIN, liveGame());
     // The server's immediate post-result fanout must not erase the slip.
     game = gameReducer(game, { type: 'game/private-state', privateView: privateView(SELF_ID) });
@@ -512,9 +512,9 @@ describe('round result slip presentation (WU9)', () => {
     const { rerender } = render(
       <GameTable controller={controllerStub() as RoomFlowController} state={stateWithGame(game)} />,
     );
-    expect(screen.getByRole('status', { name: 'Round result' })).toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toBeInTheDocument();
 
-    // Actual gameplay resumed: the next non-round-end event batch clears it.
+    // A fast next turn (e.g. an automatic draw) must not erase the result.
     game = gameReducer(game, {
       type: 'game/events',
       events: [{ type: 'CARD_DRAWN', playerId: OTHER_ID }],
@@ -522,7 +522,9 @@ describe('round result slip presentation (WU9)', () => {
     rerender(
       <GameTable controller={controllerStub() as RoomFlowController} state={stateWithGame(game)} />,
     );
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
   });
 });
 
@@ -545,7 +547,7 @@ describe('round result reveal motion (M8)', () => {
         state={capturedState(EXHAUSTION)}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
     const flips = container.querySelectorAll('[data-motion="card-flip"]');
     expect(flips).toHaveLength(2);
     for (const shell of flips) {
@@ -592,7 +594,7 @@ describe('round result reveal motion (M8)', () => {
     const firstNode = container.querySelector('[data-motion="card-flip"]');
     expect(firstNode).toHaveAttribute('data-motion-sequence', '1');
 
-    await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
     expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
 
     // Round 2 ends: a fresh capture re-arms the slip and the flip replays with
@@ -626,7 +628,7 @@ describe('round result reveal motion (M8)', () => {
     );
     // The slip's public reveal shells flip; the viewer's own hand never does.
     expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(2);
-    const ownHand = screen.getByRole('region', { name: 'Your hand' });
+    const ownHand = screen.getByRole('region', { name: 'Tu mano' });
     expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
     expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
   });
@@ -691,7 +693,7 @@ describe('round result token award cues (M8)', () => {
         )}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
     const awardLines = within(slip).getAllByRole('listitem');
     expect(awardLines).toHaveLength(2);
     for (const line of awardLines) {
@@ -754,8 +756,8 @@ describe('round result token award cues (M8)', () => {
         ])}
       />,
     );
-    const slip = screen.getByRole('status', { name: 'Round result' });
-    expect(within(slip).getByText(/Ana earned 1 victory token/i)).toBeInTheDocument();
+    const slip = screen.getByRole('status', { name: 'Resultado de la ronda' });
+    expect(within(slip).getByText(/Ana obtuvo 1 ficha de victoria/i)).toBeInTheDocument();
     expect(slip.textContent).not.toContain('p-ghost');
   });
 });

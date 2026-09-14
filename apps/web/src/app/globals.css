@@ -313,48 +313,129 @@ body {
   font-weight: 700;
 }
 
-/* M7 game placeholders. These semantic aliases are the M8 configuration seam:
-   assets, geometry, materials, and motion remain intentionally undecided. */
+/* ==========================================================================
+   Digital Tabletop Arcade — game scene (docs/10–14 visual specification).
+   The home and lobby keep their Cartelera voice above; everything below is
+   the in-match table: environment, felt table, seats, center stage, own
+   hand, private modals, results, and presentation-only motion.
+   Canonical card art comes from the asset config (lib/game/card-assets.ts);
+   CSS only adds state overlays, shadows, and motion — it never redraws a
+   card that has a mapped asset.
+   ========================================================================== */
+
+.table-scene {
+  /* Environment layer (z 1): quieter than the table, crop-tolerant. No
+     environment art asset exists in the repository, so the scene uses a
+     procedural low-contrast vignette (recorded as an asset gap). */
+  --env-base: #10212a;
+  --env-glow: #1b3a44;
+  --felt-deep: #0b3f43;
+  --felt: #125a5d;
+  --felt-light: #1b7275;
+  --felt-rim: #082a2e;
+  --felt-edge: rgba(255, 255, 255, 0.08);
+  --ink: #f5f1e6;
+  --ink-soft: rgba(245, 241, 230, 0.74);
+  --ink-dark: #1a1712;
+  --hud: rgba(7, 20, 25, 0.78);
+  --hud-strong: #0a1a20;
+  --arcade-yellow: #ffd23f;
+  --arcade-yellow-deep: #c19a16;
+  --arcade-coral: #ff6b57;
+  --arcade-coral-deep: #b7392a;
+  --arcade-shield: #62c3ff;
+  --arcade-mint: #53e0a1;
+  --arcade-gold: #ffc53d;
+  --arcade-muted: #8a9ba0;
+  --ui-font:
+    ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Documented z-index order (docs/12): environment → system overlay. */
+  --z-environment: 1;
+  --z-table: 2;
+  --z-seats: 3;
+  --z-piles: 4;
+  --z-cues: 5;
+  --z-hud: 6;
+  --z-modal: 7;
+  --z-system: 8;
+  position: relative;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding-block: max(0.75rem, env(safe-area-inset-top)) max(0.75rem, env(safe-area-inset-bottom));
+  padding-inline: max(1rem, env(safe-area-inset-left)) max(1rem, env(safe-area-inset-right));
+  color: var(--ink);
+  font-family: var(--ui-font);
+  line-height: 1.35;
+  background: radial-gradient(
+    120% 80% at 50% 45%,
+    var(--env-glow) 0%,
+    var(--env-base) 62%,
+    #0a161c 100%
+  );
+  isolation: isolate;
+  /* The tilted felt's near edge is wider than its box; never let it (or a
+     thrown card) create horizontal page scroll. */
+  overflow-x: hidden;
+}
 
 .game-table {
-  /* WU9: anchors the centered round-result slip inside the table. */
-  position: relative;
-  /* M8 finish: the table plane is the darker ink-green token, so the playable
-     table reads as a distinct surface from the cork board page ground around
-     it — existing palette only, no gradient or texture. */
-  --game-surface: var(--paper-ink);
-  --game-placeholder-surface: var(--paper);
-  --game-placeholder-ink: var(--paper-ink);
-  --game-status-accent: var(--yellow);
-  --game-danger-accent: var(--coral-ink);
-  --game-outline: 1px solid var(--game-placeholder-ink);
-  --game-layout-gap: 1rem;
-  --game-card-min-inline: 7rem;
-  --game-card-max-inline: 13rem;
-  /* Card-lift shadow color, derived from --board #17332d: a semantic
-     variable for the one M8 elevation, never a new palette role. */
+  /* Card-lift shadow color, derived from --board #17332d. */
   --game-card-lift-shadow-color: 23, 51, 45;
-  --game-card-compact-inline: 4.5rem;
-  --game-card-compact-max-inline: 7rem;
-  --game-card-compact-block: 5rem;
+  --game-layout-gap: 0.5rem;
+  /* Card size tiers (docs/11) as fluid tokens; each zone sets --card-w. */
+  --card-ratio: 4 / 7;
+  --card-radius: 0.55rem;
+  --hand-card: clamp(7.25rem, 27vw, 8.75rem);
+  --pile-card: clamp(3.75rem, 15vw, 4.75rem);
+  --seat-back: 1.3rem;
+  --stage-card: var(--pile-card);
+  position: relative;
+  z-index: var(--z-table);
   display: grid;
   gap: var(--game-layout-gap);
-  color: var(--paper);
-  background: var(--game-surface);
-  /* M8 responsive recomposition: the semantic DOM reading order (turn state,
-     own hand, center piles, public player zones) is fixed; the viewport bands
-     rearrange only the visual topology through named grid areas. The default
-     template declares no error row: in the common no-error table there is
-     nothing to reserve, so no empty first-row gap can render. When the alarm
-     slip exists, the :has() template below prepends its top row in every band.
-     Mobile: own hand dominant, center piles compact two-up, safe-area padding. */
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  color: var(--ink);
+  /* Semantic DOM order (turn state, own hand, center, players) is fixed; the
+     bands rearrange only the visual topology. Mobile: compact opponent strip,
+     the action stage, then the dominant own hand at the bottom. */
   grid-template-areas:
     'game-table-heading'
-    'game-own-hand'
+    'game-players'
     'game-center'
-    'game-players';
-  padding: max(1rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
-    max(1rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
+    'game-own-hand';
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  min-height: calc(100dvh - 1.5rem);
+}
+
+/* The felt table (z 2): a rounded oval tilted away from the viewer for a
+   tabletop 3D read, spanning the action stage. The texture is procedural
+   (no texture asset exists in the repository): low-contrast light plus a
+   fine fabric weave. */
+.game-table::before {
+  content: '';
+  grid-column: 1 / -1;
+  grid-row: game-center-start / game-center-end;
+  z-index: -1;
+  margin-inline: 0.25rem;
+  border-radius: 50% / 42%;
+  background:
+    radial-gradient(
+      90% 70% at 50% 42%,
+      var(--felt-light) 0%,
+      var(--felt) 48%,
+      var(--felt-deep) 100%
+    ),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.018) 0 2px, transparent 2px 5px);
+  background-blend-mode: soft-light, normal;
+  box-shadow:
+    inset 0 0 0 0.35rem var(--felt-rim),
+    inset 0 0 0 0.45rem var(--felt-edge),
+    inset 0 1.25rem 3rem rgba(0, 0, 0, 0.28),
+    0 1.5rem 3rem rgba(0, 0, 0, 0.35);
+  transform: perspective(60rem) rotateX(22deg);
+  transform-origin: 50% 60%;
 }
 
 .game-table-heading {
@@ -373,11 +454,7 @@ body {
   grid-area: game-players;
 }
 
-/* WU6 correction: the alarm slip owns the top grid row in every band — it is
-   never auto-placed below the table where it could be missed. The row is
-   conditional: :has(> .game-error) swaps in an error-first template per band
-   only when the slip is actually rendered, so the no-error table keeps its
-   compact default topology. */
+/* The alarm slip owns the top row only when it exists: :has() prepends it. */
 .game-error {
   grid-area: game-error;
 }
@@ -386,293 +463,314 @@ body {
   grid-template-areas:
     'game-error'
     'game-table-heading'
-    'game-own-hand'
+    'game-players'
     'game-center'
-    'game-players';
+    'game-own-hand';
+  grid-template-rows: auto auto auto minmax(0, 1fr) auto;
 }
 
-.game-table-heading,
-.game-table-message,
-.game-own-hand {
+/* Challenge announcement (z 5): a short, public headline over the stage. */
+.game-announcement {
+  position: absolute;
+  top: 42%;
+  left: 50%;
+  z-index: var(--z-cues);
+  display: grid;
+  justify-items: center;
+  gap: 0.15rem;
+  width: min(20rem, calc(100% - 2rem));
+  padding: 0.8rem 1.1rem 0.9rem;
+  border: 3px solid #fff;
+  border-radius: 1.25rem;
+  background: #3a4a8c;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 1rem 2.5rem rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%);
+  animation: motion-announce 2600ms ease-out forwards;
+}
+
+.game-announcement[data-tone='fail'] {
+  background: #4d5566;
+  border-color: #aab4c6;
+}
+
+.game-announcement[data-tone='success'] {
+  background: #1f8a5b;
+}
+
+.game-announcement-face {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: #ffd23f;
+  box-shadow: inset 0 -0.2rem 0 rgba(0, 0, 0, 0.18);
   position: relative;
-  background: var(--game-placeholder-surface);
-  color: var(--game-placeholder-ink);
-  border: var(--game-outline);
-  padding: 1.5rem 1rem 1rem;
 }
 
-.game-table-heading h1,
-.game-own-hand h2,
-.game-pile h2 {
+/* Face features: two eyes and a mouth, drawn as decoration only. */
+.game-announcement-face::before {
+  content: '';
+  position: absolute;
+  top: 34%;
+  left: 27%;
+  width: 0.35rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #1a1712;
+  box-shadow: 0.85rem 0 0 #1a1712;
+}
+
+.game-announcement-face::after {
+  content: '';
+  position: absolute;
+  left: 30%;
+  width: 40%;
+  height: 0.55rem;
+  border: 0.18rem solid #1a1712;
+  top: 58%;
+  border-color: #1a1712 transparent transparent;
+  border-radius: 50% 50% 0 0;
+}
+
+.game-announcement[data-tone='fail'] .game-announcement-face {
+  background: #8fc3ff;
+}
+
+.game-announcement[data-tone='success'] .game-announcement-face::after,
+.game-announcement[data-tone='neutral'] .game-announcement-face::after {
+  top: 48%;
+  border-color: transparent transparent #1a1712;
+  border-radius: 0 0 50% 50%;
+}
+
+.game-announcement-title {
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.game-announcement-detail {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+/* ---- HUD (z 6): minimal round chip + turn banner ------------------------ */
+
+.game-table-heading {
+  position: relative;
+  z-index: var(--z-hud);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.6rem;
+  text-align: center;
+}
+
+.game-table-heading h1 {
   margin: 0;
-  font-size: 1rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  background: var(--hud);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.game-turn,
-.game-pending,
-.game-pile p,
-.game-player-zone p {
-  margin: 0.35rem 0 0;
-}
-
 .game-turn {
-  font-weight: 700;
-}
-
-.game-center {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--game-layout-gap);
-}
-
-.game-pile,
-.game-player-zone {
-  position: relative;
-  background: var(--game-placeholder-surface);
-  color: var(--game-placeholder-ink);
-  border: var(--game-outline);
-  padding: 1.35rem 0.85rem 0.85rem;
-}
-
-/* Cartelera attachment: every gameplay paper surface is pinned to the board
-   like a slip — the existing 0.8rem enamel pin (board core, yellow rim),
-   CSS-only on the surface itself. Nested content stays plain paper: no inner
-   cards, no extra chrome. */
-.game-table-heading::before,
-.game-own-hand::before,
-.game-pile::before,
-.game-player-zone::before {
-  content: '';
-  position: absolute;
-  top: 0.55rem;
-  left: 0.55rem;
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--board);
-  border: 2px solid var(--yellow);
-}
-
-.game-pile {
-  display: grid;
-  justify-items: start;
-  align-content: start;
-  gap: 0.6rem;
-  /* M8 finish: the shared pile card gets a definite track sized by the card
-     tokens, so it honors the 13rem desktop max instead of collapsing to the
-     compact 7rem back width; content stays start-aligned while the card
-     centers in its track. */
-  grid-template-columns: minmax(var(--game-card-min-inline), var(--game-card-max-inline));
-  justify-content: start;
-}
-
-.game-pile > * {
-  grid-column: 1;
-}
-
-.game-pile .game-card-placeholder {
-  justify-self: center;
-  width: 100%;
-  min-width: 0;
-  max-width: var(--game-card-max-inline);
-}
-
-.game-player-list,
-.game-hand-list {
-  list-style: none;
   margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--game-layout-gap);
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  background: var(--hud);
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 800;
 }
 
-.game-player-list {
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+.game-table-heading[data-your-turn='true'] .game-turn {
+  background: var(--arcade-yellow);
+  color: var(--ink-dark);
+  box-shadow: 0 0.2rem 0 var(--arcade-yellow-deep);
+  animation: motion-turn-banner 320ms ease-out;
 }
 
-.game-player-zone[data-eliminated='true'] {
-  border-style: dashed;
+.game-pending {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
 }
 
-.game-player-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.75rem;
-  align-items: baseline;
+.game-table-message {
+  margin: 3rem auto 0;
+  width: min(28rem, 100%);
+  padding: 1.25rem 1.5rem;
+  border-radius: 1.25rem;
+  background: var(--hud);
+  color: var(--ink, #f5f1e6);
+  text-align: center;
 }
 
-/* M8 seat identity: the avatar stamp rides beside the printed name — a compact
-   seat marker, never a full slip. The variant attribute selects one of four
-   deterministic ink/paper treatments resolved below. */
-.game-player-identity {
+/* ---- Arcade buttons ------------------------------------------------------ */
+
+.game-table .action-button,
+.game-modal .action-button,
+.game-match-result .action-button {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.game-seat-avatar {
-  display: inline-grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  flex-shrink: 0;
-  border: 2px solid var(--game-placeholder-ink);
-  border-radius: 2px;
-  background: var(--game-placeholder-surface);
-  color: var(--game-placeholder-ink);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-/* Variants distinguish by tonal paper/ink treatments on a solid border:
-   dashed is reserved for provisional/empty surfaces, never a connected seated
-   player. Labels (the initials) are retained in every variant. */
-.game-seat-avatar[data-avatar-variant='1'] {
-  background: var(--paper-raised);
-}
-
-.game-seat-avatar[data-avatar-variant='2'] {
-  background: var(--game-placeholder-ink);
-  color: var(--game-placeholder-surface);
-}
-
-.game-seat-avatar[data-avatar-variant='3'] {
-  border-color: var(--paper-faded);
-  color: var(--paper-faded);
-}
-
-.game-player-zone p {
-  font-size: 0.85rem;
-}
-
-/* M8 correction: the seat header resolves through explicit identity classes —
-   a broad `.game-player-header span` descendant rule would also restyle the
-   avatar's initials and defeat the avatar's own font-size. */
-.game-player-name {
-  font-size: 1rem;
-  /* Long display names wrap inside the seat header instead of overflowing
-     the 320px floor; the identity wrapper is allowed to shrink. */
-  overflow-wrap: anywhere;
-  min-width: 0;
-}
-
-.game-player-presence {
-  font-size: 0.85rem;
-}
-
-.game-status-list {
-  display: flex;
-  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.35rem;
-  min-height: 1.4rem;
-  margin-top: 0.5rem;
+  min-height: 3rem;
+  padding: 0.45rem 1.1rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--arcade-yellow);
+  color: var(--ink-dark);
+  font-family: var(--ui-font);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-align: center;
+  box-shadow: 0 0.25rem 0 var(--arcade-yellow-deep);
+  transition:
+    transform 140ms ease-out,
+    box-shadow 140ms ease-out,
+    filter 140ms ease-out;
 }
 
-.game-status-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border: 1px solid currentColor;
-  padding: 0.1rem 0.35rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
+.game-table .action-button:hover:not(:disabled),
+.game-modal .action-button:hover:not(:disabled) {
+  background: var(--arcade-yellow);
+  filter: brightness(1.06);
+  transform: translateY(-1px);
 }
 
-/* The badge's enamel-pin core: a structural marker, never a color-only one. */
-.game-status-pin {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: currentColor;
+.game-table .action-button:active:not(:disabled),
+.game-modal .action-button:active:not(:disabled) {
+  transform: translateY(0.15rem);
+  box-shadow: 0 0.1rem 0 var(--arcade-yellow-deep);
 }
 
-.game-player-zone[data-protected='true'] .game-status-list {
-  color: var(--game-placeholder-ink);
-  text-decoration: underline var(--game-status-accent) 3px;
-  text-underline-offset: 0.2rem;
+.game-table .action-button:disabled,
+.game-modal .action-button:disabled {
+  background: #5d6b70;
+  color: #d9dfe0;
+  box-shadow: 0 0.2rem 0 #3d484c;
+  border-style: none;
+  opacity: 0.8;
+  cursor: progress;
 }
 
-.game-player-zone[data-eliminated='true'] .game-status-list {
-  color: var(--game-danger-accent);
-}
-
-.game-opponent-hand,
-.game-discards,
-.game-hand-list {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-}
+/* ---- Cards --------------------------------------------------------------- */
 
 .game-card-placeholder {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
-  gap: 0.25rem 0.5rem;
+  gap: 0.2rem 0.4rem;
   align-content: start;
-  /* M8: the recorded 63:88 playable card ratio, square corners. Width is
-     fluid (min/max tokens) and height follows from the ratio. */
-  aspect-ratio: 63 / 88;
+  /* Native ratio of the canonical card art (1080x1890 → 4:7). Documented
+     deviation from the 63:88 draft: the canonical art is never cropped or
+     redrawn to fit another frame. */
+  aspect-ratio: 4 / 7;
+  width: var(--card-w, 100%);
+  max-width: 100%;
+  padding: 0.45rem;
+  overflow: hidden;
+  border-radius: var(--card-radius);
+  background: #fffdf7;
+  color: var(--ink-dark);
+  box-shadow:
+    0 0.1rem 0.15rem rgba(0, 0, 0, 0.22),
+    0 0.45rem 1rem rgba(0, 0, 0, 0.26);
+  font-family: var(--ui-font);
+}
+
+/* Canonical art is the whole face; the textual metadata stays in the DOM for
+   assistive technology (and tests) but is visually hidden. */
+.game-card-placeholder[data-art-kind='image'] {
+  padding: 0;
+  background: #fffdf7;
+}
+
+.game-card-image {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  min-width: var(--game-card-min-inline);
-  max-width: var(--game-card-max-inline);
-  padding: 0.55rem;
-  border-radius: 2px;
-  color: var(--game-placeholder-ink);
-  background: var(--game-placeholder-surface);
-  border: var(--game-outline);
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.game-card-placeholder[data-art-kind='image'] .game-card-art {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  min-height: 0;
+}
+
+.game-card-placeholder[data-art-kind='image'] .game-card-value,
+.game-card-placeholder[data-art-kind='image'] .game-card-name,
+.game-card-placeholder[data-art-kind='image'] .game-card-effect,
+.game-card-placeholder-back[data-art-kind='image'] .game-card-back-stamp {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .game-card-placeholder-back {
-  /* Reset the inherited face-up grid template: the back is one optical unit —
-     a centered stamp inside an ink frame — so it places its single child
-     dead-center at every size. */
   display: grid;
   grid-template-columns: 100%;
   grid-template-rows: 100%;
   place-items: center;
-  position: relative;
-  aspect-ratio: 63 / 88;
-  width: 100%;
-  min-width: var(--game-card-compact-inline);
-  max-width: var(--game-card-compact-max-inline);
-  padding: 0.55rem;
-  border-radius: 2px;
-  border-style: dashed;
-  font-size: 0.75rem;
+  aspect-ratio: 4 / 7;
+  width: var(--card-w, 100%);
+  padding: 0.3rem;
+  background: #7a2f1c;
+  color: var(--arcade-yellow);
+  font-size: 0.62rem;
   text-align: center;
 }
 
-/* M8 stamped back: an inner ink frame and the honest face-down word — pure
-   CSS, palette colors only, no texture or gradient. */
+.game-card-placeholder-back[data-art-kind='image'] {
+  padding: 0;
+  background: #5b2616;
+}
+
+/* CSS-only fallback faces, used only when the asset config maps nothing. */
 .game-card-back-stamp {
   display: grid;
   place-items: center;
-  gap: 0.35rem;
   width: 100%;
   height: 100%;
 }
 
 .game-card-back-frame {
   position: absolute;
-  inset: 0.3rem;
-  border: 1px solid var(--game-placeholder-ink);
-  border-radius: 2px;
+  inset: 0.25rem;
+  border: 1px solid currentColor;
+  border-radius: calc(var(--card-radius) - 0.2rem);
   pointer-events: none;
 }
 
 .game-card-back-word {
   z-index: 1;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-weight: 800;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
@@ -680,154 +778,887 @@ body {
   grid-column: 1 / -1;
   display: grid;
   place-items: center;
-  min-height: 2.5rem;
+  min-height: 2rem;
   align-self: stretch;
-  padding: 0.35rem;
-  border: 1px dashed var(--paper-faded);
-  border-radius: 2px;
-  color: var(--paper-faded);
-  font-size: 0.7rem;
+  border-radius: 0.35rem;
+  background: #efe6d2;
+  color: #6b6456;
+  font-size: 0.62rem;
   text-align: center;
 }
 
-/* M8 stamped art placeholder: a centered ink mark inside the dashed well —
-   pure CSS stamping from the public metadata seam, no image, no gradient. */
 .game-card-art-stamp {
   display: grid;
   place-items: center;
-  gap: 0.3rem;
+  gap: 0.25rem;
 }
 
 .game-card-art-mark {
-  width: 1.4rem;
-  height: 1.4rem;
-  border: 2px solid var(--paper-faded);
+  width: 1.2rem;
+  height: 1.2rem;
+  border: 2px solid currentColor;
   border-radius: 50%;
 }
 
-.game-card-art img {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
 .game-card-value {
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 900;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .game-card-name {
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.1;
 }
 
 .game-card-effect {
   grid-column: 1 / -1;
-  margin: 0.25rem 0 0;
-  font-size: 0.8rem;
+  margin: 0;
+  font-size: 0.62rem;
+  line-height: 1.2;
 }
 
-.game-discards .game-card-placeholder,
-.game-opponent-hand .game-card-placeholder {
-  min-width: var(--game-card-compact-inline);
-  max-width: var(--game-card-compact-max-inline);
-  min-height: var(--game-card-compact-block);
-}
-
-.game-discards .game-card-art,
-.game-discards .game-card-effect {
-  display: none;
+/* Public origin ribbon overlay (forced play / elimination reveal). */
+.game-card-origin {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 6%;
+  z-index: 1;
+  padding: 0.05rem 0.15rem;
+  background: var(--arcade-coral);
+  color: #fff;
+  font-size: 0.42rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .game-empty-slot {
   display: grid;
   place-items: center;
-  min-width: var(--game-card-compact-inline);
-  min-height: var(--game-card-compact-block);
-  border: 1px dashed var(--paper-faded);
-  padding: 0.5rem;
-  color: var(--paper-faded);
+  aspect-ratio: 4 / 7;
+  width: var(--card-w, 100%);
+  padding: 0.35rem;
+  border: 2px dashed rgba(245, 241, 230, 0.28);
+  border-radius: var(--card-radius);
+  color: var(--ink-soft);
+  font-size: 0.68rem;
   text-align: center;
 }
 
-/* WU6 server-gated turn controls. Coral is status-only: the error slip is
-   the one alarm surface on the table, with the sentence carrying the words. */
+/* ---- Center action stage (z 4) ------------------------------------------ */
 
-.game-error {
-  background: var(--game-placeholder-surface);
-  color: var(--game-danger-accent);
-  border: 2px solid var(--coral);
-  padding: 1rem;
+/* Draw pile on the left, shared discard pile in the middle, the round's
+   hidden card on the right. The group sits on the tilted felt. */
+.game-center {
+  position: relative;
+  z-index: var(--z-piles);
   display: grid;
-  justify-items: start;
-  gap: 0.55rem;
+  grid-template-columns: repeat(3, minmax(0, max-content));
+  justify-content: center;
+  align-content: center;
+  align-items: center;
+  gap: clamp(1rem, 5vw, 3.5rem);
+  padding: 0.75rem 0.5rem 1rem;
+  transform: perspective(60rem) rotateX(14deg);
+  transform-style: preserve-3d;
+  /* The stage cell overlaps the seats around it: only its own control may
+     take pointer events, so seat target buttons stay reachable. */
+  pointer-events: none;
 }
 
-.game-error-sentence {
+.game-center .action-button {
+  pointer-events: auto;
+}
+
+.game-pile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 0.35rem;
+  --card-w: var(--pile-card);
+}
+
+.game-pile h2 {
+  order: 3;
   margin: 0;
-  font-weight: 700;
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.game-pile p {
+  order: 2;
+  margin: -1rem 0 0;
+  z-index: 1;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--hud-strong);
+  color: var(--ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-pile .game-card-placeholder,
+.game-pile .game-empty-slot {
+  order: 1;
+}
+
+.game-pile .action-button,
+.game-pile-status {
+  order: 4;
+}
+
+.game-pile-status {
+  color: var(--arcade-yellow);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+/* Visible deck thickness: stacked edge shadows scale with the public count. */
+.game-pile[data-token-role='draw-pile'] .game-card-placeholder-back {
+  box-shadow:
+    0 0.12rem 0 #3a160c,
+    0 0.24rem 0 #2c1109,
+    0 0.36rem 0 #3a160c,
+    0 0.9rem 1.4rem rgba(0, 0, 0, 0.4);
+}
+
+.game-pile[data-stack='low'] .game-card-placeholder-back {
+  box-shadow:
+    0 0.12rem 0 #3a160c,
+    0 0.6rem 1rem rgba(0, 0, 0, 0.35);
+}
+
+.game-pile[data-stack='mid'] .game-card-placeholder-back {
+  box-shadow:
+    0 0.12rem 0 #3a160c,
+    0 0.24rem 0 #2c1109,
+    0 0.75rem 1.2rem rgba(0, 0, 0, 0.38);
+}
+
+/* Draw required: soft halo on the deck (also carried by the turn banner). */
+.game-pile[data-draw-ready='true'] .game-card-placeholder-back {
+  outline: 3px solid var(--arcade-yellow);
+  outline-offset: 0.2rem;
+  animation: motion-deck-ready 1800ms ease-in-out infinite;
+}
+
+.game-pile[data-token-role='hidden-card'] {
+  --card-w: calc(var(--pile-card) * 0.85);
+}
+
+.game-pile[data-token-role='hidden-card'] .game-card-placeholder-back {
+  transform: rotate(9deg);
+}
+
+/* Shared discard pile: every public card face up, stacked with a slight
+   deterministic tilt; the newest card is on top. */
+.game-discards {
+  --card-w: calc(var(--pile-card) * 1.15);
+  display: grid;
+  grid-template-areas: 'pile';
+  place-items: center;
+  width: calc(var(--pile-card) * 1.6);
+  min-height: calc(var(--pile-card) * 1.15 * 1.75 + 1rem);
+  perspective: 40rem;
+}
+
+.game-discards > .game-discard-slot,
+.game-discards > .game-empty-slot {
+  grid-area: pile;
+}
+
+.game-discard-count {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.game-discard-slot {
+  position: relative;
+  display: grid;
+  transform: translate(var(--shift-x, 0), var(--shift-y, 0)) rotate(var(--tilt, 0deg));
+}
+
+.game-discard-slot .game-card-placeholder {
+  box-shadow: 0 0.35rem 0.8rem rgba(0, 0, 0, 0.35);
+}
+
+.game-discard-slot[data-forced='true'] .game-card-origin {
+  /* Forced plays read as an event ribbon, never as a selection ring. */
+  background: var(--arcade-coral);
+}
+
+.game-discard-slot-pin {
+  display: none;
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  z-index: 2;
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--arcade-coral);
+}
+
+.game-discards .game-card-placeholder[data-art-kind='none'] .game-card-art,
+.game-discards .game-card-placeholder[data-art-kind='none'] .game-card-effect {
+  display: none;
+}
+
+/* ---- Seats around the table (z 3) --------------------------------------- */
+
+.game-players {
+  position: relative;
+  z-index: var(--z-seats);
+}
+
+.game-player-list,
+.game-hand-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Mobile: a compact strip of opponent chips above the table. */
+.game-player-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.game-player-zone {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'seat-header seat-header'
+    'seat-tokens seat-hand'
+    'seat-status seat-status'
+    'seat-target seat-target';
+  align-items: center;
+  gap: 0.1rem 0.4rem;
+  min-width: 0;
+  width: 9.75rem;
+  max-width: 100%;
+  padding: 0.35rem 0.45rem;
+  border: 2px solid transparent;
+  border-radius: 0.9rem;
+  background: rgba(6, 22, 26, 0.7);
+  color: var(--ink);
+  transition:
+    opacity 400ms ease-out,
+    filter 400ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.game-player-header {
+  grid-area: seat-header;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.game-player-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+/* Name takes the free space; the count badge rides at the end. */
+.game-player-identity {
+  flex: 1 1 auto;
+}
+
+.game-player-name {
+  font-size: 1rem;
+  font-weight: 800;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.game-player-self-tag {
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--ink-dark);
+  font-size: 0.58rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.game-player-presence {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+/* Connected is the quiet default: announced, not drawn. Absence is shown. */
+.game-player-presence[data-connected='true'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.game-player-presence[data-connected='false'] {
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #3b4549;
+  color: #ffd9d3;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* UNO-style public card count badge. */
+.game-seat-count {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  min-width: 1.6rem;
+  height: 1.9rem;
+  padding: 0 0.25rem;
+  border: 2px solid #1b2a30;
+  border-radius: 0.35rem;
+  background: #fffdf7;
+  color: #1a1712;
+  font-size: 0.95rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0.15rem 0.15rem 0 #c9c2b0;
+}
+
+/* Avatar tile. No avatar art exists in the repository (asset gap): a
+   name-derived initials token in four hues. */
+.game-seat-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--ink);
+  border-radius: 0.55rem;
+  background: #ff8a5b;
+  color: var(--ink-dark);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  box-shadow: 0 0.15rem 0 rgba(0, 0, 0, 0.35);
+}
+
+.game-seat-avatar[data-avatar-variant='1'] {
+  background: #62c3ff;
+}
+
+.game-seat-avatar[data-avatar-variant='2'] {
+  background: #53e0a1;
+}
+
+.game-seat-avatar[data-avatar-variant='3'] {
+  background: #c9a4ff;
+}
+
+/* Status chips: every state carries text plus an icon shape. */
+.game-status-list {
+  grid-area: seat-status;
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 0;
+}
+
+.game-status-list:empty {
+  display: none;
+}
+
+.game-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem 0.05rem 0.25rem;
+  border-radius: 999px;
+  background: #33444a;
+  color: var(--ink);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.game-status-icon {
+  display: inline-block;
+  width: 0.62rem;
+  height: 0.62rem;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.game-status-badge[data-state='turn'] {
+  background: var(--arcade-yellow);
+  color: var(--ink-dark);
+}
+
+.game-status-badge[data-state='turn'] .game-status-icon {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.game-status-badge[data-state='protected'] {
+  background: var(--arcade-shield);
+  color: #06283b;
+}
+
+.game-status-badge[data-state='protected'] .game-status-icon {
+  clip-path: polygon(50% 0, 100% 18%, 92% 62%, 50% 100%, 8% 62%, 0 18%);
+}
+
+.game-status-badge[data-state='eliminated'] {
+  background: #1d2326;
+  color: #ff9d90;
+  border: 1px solid #ff9d90;
+}
+
+.game-status-badge[data-state='eliminated'] .game-status-icon {
+  clip-path: polygon(
+    20% 0,
+    50% 30%,
+    80% 0,
+    100% 20%,
+    70% 50%,
+    100% 80%,
+    80% 100%,
+    50% 70%,
+    20% 100%,
+    0 80%,
+    30% 50%,
+    0 20%
+  );
+}
+
+.game-status-badge[data-state='winner'] {
+  background: var(--arcade-gold);
+  color: var(--ink-dark);
+}
+
+.game-status-badge[data-state='winner'] .game-status-icon {
+  clip-path: polygon(
+    50% 0,
+    62% 35%,
+    100% 38%,
+    70% 60%,
+    80% 100%,
+    50% 77%,
+    20% 100%,
+    30% 60%,
+    0 38%,
+    38% 35%
+  );
+}
+
+/* Seat states. */
+.game-player-zone[data-current-turn='true'] {
+  border-color: var(--arcade-yellow);
+  box-shadow: 0 0 0 0.2rem rgba(255, 210, 63, 0.25);
+}
+
+.game-seat-avatar {
+  position: relative;
+}
+
+.game-player-zone[data-current-turn='true'] .game-seat-avatar::after {
+  content: '';
+  position: absolute;
+  inset: -0.25rem;
+  border: 2px solid var(--arcade-yellow);
+  border-radius: 0.75rem;
+  opacity: 0;
+  pointer-events: none;
+  animation: motion-turn-halo 2400ms ease-out infinite;
+}
+
+.game-player-zone[data-protected='true'] {
+  border-color: var(--arcade-shield);
+}
+
+.game-player-zone[data-eliminated='true'] {
+  border-style: dashed;
+  border-color: #5a6468;
+  filter: saturate(0.25);
+  opacity: 0.72;
+}
+
+.game-player-zone[data-connected='false'] .game-seat-avatar {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.game-player-zone[data-winner='true'] {
+  border-color: var(--arcade-gold);
+  box-shadow: 0 0 0 0.25rem rgba(255, 197, 61, 0.35);
+}
+
+.game-table[data-targeting='true'] .game-player-zone:not([data-legal-target='true']) {
+  opacity: 0.55;
+}
+
+.game-player-zone[data-legal-target='true'] {
+  border-color: var(--arcade-coral);
+  box-shadow: 0 0 0 0.25rem rgba(255, 107, 87, 0.3);
+}
+
+/* Victory tokens: a gold coin plus the printed count. */
+.game-token-rack {
+  grid-area: seat-tokens;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-self: start;
+  gap: 0.2rem;
+  padding: 0.05rem 0.4rem 0.05rem 0.15rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.game-token-rack::after {
+  content: '×' attr(data-count);
+  color: var(--arcade-gold);
+  font-size: 0.72rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.game-token-rack::before {
+  content: '';
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #ffe68a 0 30%, var(--arcade-gold) 31% 100%);
+  box-shadow: inset 0 -0.1rem 0 #b3801a;
+}
+
+.game-token-list {
+  display: none;
+}
+
+.game-token-total {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.game-token-pulse {
+  position: absolute;
+  inset: -0.2rem;
+  border-radius: 999px;
+  background: rgba(255, 197, 61, 0.35);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game-status-pulse {
+  position: absolute;
+  inset: -0.2rem;
+  border-radius: 999px;
+  background: rgba(98, 195, 255, 0.35);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Hidden hand backs: small identity-free backs, fanned. */
+.game-opponent-hand {
+  grid-area: seat-hand;
+  justify-self: end;
+  display: flex;
+  align-items: flex-end;
+  min-height: 0;
+  --card-w: var(--seat-back);
+}
+
+.game-opponent-hand .game-card-placeholder-back {
+  --card-radius: 0.2rem;
+  box-shadow: 0 0.1rem 0.25rem rgba(0, 0, 0, 0.4);
+}
+
+.game-opponent-hand .game-card-placeholder-back + .game-card-placeholder-back {
+  margin-inline-start: calc(var(--seat-back) * -0.45);
+  transform: rotate(10deg);
+}
+
+.game-opponent-hand .game-card-back-word {
+  display: none;
+}
+
+/* The viewer's own hand is shown below; its seat keeps only the backs count. */
+.game-player-zone[data-self='true'] .game-opponent-hand {
+  visibility: hidden;
+}
+
+.game-target-controls {
+  grid-area: seat-target;
+  display: flex;
+  min-height: 3rem;
+  margin-top: 0.2rem;
+}
+
+.game-target-button {
+  width: 100%;
+  font-size: 0.78rem;
+}
+
+.game-table .game-target-button {
+  background: var(--arcade-coral);
+  color: #fff;
+  box-shadow: 0 0.25rem 0 var(--arcade-coral-deep);
+}
+
+.game-table .game-target-button:hover:not(:disabled) {
+  background: var(--arcade-coral);
+}
+
+/* ---- Own hand: dominant, bottom-anchored -------------------------------- */
+
+.game-own-hand {
+  position: relative;
+  z-index: var(--z-cues);
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  padding: 0 0 0.35rem;
+}
+
+.game-own-hand h2 {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 0.15rem 0.65rem;
+  border-radius: 999px;
+  background: var(--hud);
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.game-own-hand > p {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
+.game-hand-list {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.6rem;
+  max-width: 100%;
+  --card-w: var(--hand-card);
 }
 
 .game-hand-entry {
+  position: relative;
   display: grid;
-  justify-items: start;
-  gap: 0.55rem;
+  justify-items: center;
+  align-content: end;
+  gap: 0.4rem;
+  width: var(--hand-card);
+  max-width: calc(50% - 0.3rem);
+  perspective: 50rem;
 }
 
-/* WU7 target selection: enamel yellow marks only the armed selection (the
-   status-only color rule); disabled controls keep the dashed provisional
-   language; target choices are full-size paper buttons in the player zones. */
+.game-hand-list > .game-hand-entry:only-child {
+  max-width: 100%;
+}
+
+/* A held hand fans slightly outward. */
+.game-hand-entry:first-child:not(:only-child) .game-hand-card {
+  transform: rotate(-4deg) translateY(0.2rem);
+}
+
+.game-hand-entry:last-child:not(:only-child) .game-hand-card {
+  transform: rotate(4deg) translateY(0.2rem);
+}
+
+.game-hand-card {
+  position: relative;
+  display: grid;
+  width: 100%;
+  transform-style: preserve-3d;
+}
+
+/* Two-sided held card for the receive flight: the face and the back share
+   one 3D box; whichever side faces the viewer is the one seen. */
+.game-hand-card > .game-card-placeholder {
+  backface-visibility: hidden;
+}
+
+.game-hand-card-back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  pointer-events: none;
+  backface-visibility: hidden;
+  transform: rotateY(180deg);
+  --card-w: 100%;
+}
+
+.game-hand-entry .game-card-placeholder {
+  width: 100%;
+  transition:
+    transform 180ms ease-out,
+    box-shadow 180ms ease-out;
+}
+
+.game-hand-entry .action-button {
+  width: 100%;
+  min-height: 3rem;
+  font-size: 0.78rem;
+}
+
+.game-hand-entry[data-playable='true'] .game-card-placeholder {
+  box-shadow:
+    0 0 0 0.18rem rgba(255, 210, 63, 0.75),
+    0 0.6rem 1.25rem rgba(0, 0, 0, 0.35);
+}
+
+@media (hover: hover) {
+  .game-hand-entry[data-playable='true']:hover .game-card-placeholder {
+    transform: translateY(-0.4rem) scale(1.02);
+  }
+}
 
 .game-hand-entry[data-armed='true'] {
-  /* Doubly visible armed selection, matching the DESIGN.md focus treatment: an
-     enamel yellow ring directly against the dark board (well above the 3:1
-     non-text threshold) wrapped by a Paper Ink outline. Yellow alone is
-     ~1.45:1 on paper surfaces and is never sufficient alone. The flat ring is
-     a hard-edged stamp, not elevation. */
-  box-shadow: 0 0 0 2px var(--yellow);
-  outline: 3px solid var(--paper-ink);
-  outline-offset: 2px;
+  outline: 0;
 }
 
-/* M8 soft physical lift: the one elevation DESIGN.md permits at this
-   milestone, and only on the interactive own-hand card shells — never on
-   panels, slips, or modals. Reduced motion removes it entirely. */
 @keyframes motion-card-lift {
   from {
-    transform: translateY(-0.75rem);
+    transform: translateY(0);
     box-shadow: 0 0.4rem 0.9rem rgba(var(--game-card-lift-shadow-color), 0.45);
   }
   to {
-    transform: translateY(-0.5rem);
-    box-shadow: 0 0.3rem 0.7rem rgba(var(--game-card-lift-shadow-color), 0.4);
+    transform: translateY(-0.75rem);
+    box-shadow:
+      0 0 0 0.25rem var(--arcade-yellow),
+      0 1rem 1.75rem rgba(var(--game-card-lift-shadow-color), 0.55);
   }
 }
 
 .game-hand-entry[data-armed='true'] .game-card-placeholder {
-  animation: motion-card-lift 240ms ease-out forwards;
+  box-shadow:
+    0 0 0 0.25rem var(--arcade-yellow),
+    0 1rem 1.75rem rgba(0, 0, 0, 0.45);
+  animation: motion-card-lift 200ms ease-out forwards;
 }
 
 .game-armed-prompt {
   margin: 0;
-  font-weight: 700;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  background: var(--arcade-coral);
+  color: #fff;
+  font-size: 0.74rem;
+  font-weight: 800;
+  text-align: center;
 }
 
-.game-target-controls {
+/* ---- Target picker (not mandatory) --------------------------------------- */
+
+.game-target-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgba(5, 14, 18, 0.55);
+}
+
+.game-target-picker {
+  display: grid;
+  gap: 0.6rem;
+  width: min(22rem, 100%);
+  padding: 1rem;
+  border: 3px solid var(--arcade-coral);
+  border-radius: 1.4rem;
+  background: var(--hud-strong);
+  box-shadow: 0 1.25rem 3rem rgba(0, 0, 0, 0.55);
+  animation: motion-modal-enter 220ms ease-out;
+}
+
+.game-target-picker-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.game-table .game-target-picker .game-target-button {
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  min-height: 3rem;
+  font-size: 0.9rem;
+}
+
+.game-target-avatar {
+  display: inline-flex;
+}
+
+.game-table .game-target-picker-cancel {
+  width: 100%;
+  background: #e8e2d2;
+  box-shadow: 0 0.25rem 0 #a8a08d;
+}
+
+/* ---- Error slip (system feedback) --------------------------------------- */
+
+.game-error {
+  position: relative;
+  z-index: var(--z-system);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.55rem;
-  margin-top: 0.75rem;
-  min-height: 3rem;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.55rem 1rem;
+  border-radius: 1rem;
+  background: var(--arcade-coral);
+  color: #fff;
 }
 
-.game-target-button {
-  min-width: 9rem;
+.game-error-sentence {
+  margin: 0;
+  font-weight: 800;
 }
 
-/* WU8 mandatory private decision modal: the decision sits centered over the
-   table as a pinned paper slip; the board stays visible but inert behind a
-   flat board-toned scrim (a solid wash, not glass). Coral stays reserved
-   for status; the modal needs no alarm color, so it uses the paper voice. */
+/* ---- Private decision modal (z 7) --------------------------------------- */
 
 .game-modal-overlay {
   position: fixed;
@@ -835,97 +1666,141 @@ body {
   z-index: 40;
   display: grid;
   place-items: center;
-  padding: max(1.25rem, env(safe-area-inset-top)) max(1.25rem, env(safe-area-inset-right))
-    max(1.25rem, env(safe-area-inset-bottom)) max(1.25rem, env(safe-area-inset-left));
-  background: rgba(23, 51, 45, 0.92); /* board green, nearly opaque */
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgba(5, 14, 18, 0.82);
   overflow-y: auto;
+  font-family:
+    ui-rounded,
+    'SF Pro Rounded',
+    'Nunito',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
 }
 
 .game-modal {
-  background: var(--paper);
-  color: var(--paper-ink);
-  border: 1px solid var(--paper-ink);
-  padding: 1.5rem 1.75rem 1.6rem;
   position: relative;
-  width: min(30rem, 100%);
+  width: min(34rem, 100%);
   max-height: 100%;
   overflow-y: auto;
-  scrollbar-color: var(--paper-faded) var(--paper);
+  padding: 1.25rem 1.25rem 1.4rem;
+  border: 3px solid #ffd23f;
+  border-radius: 1.5rem;
+  background: linear-gradient(180deg, #16555a 0%, #0d3a3f 100%);
+  color: #f5f1e6;
+  box-shadow: 0 1.5rem 3.5rem rgba(0, 0, 0, 0.55);
+  animation: motion-modal-enter 240ms ease-out;
+  --card-radius: 0.55rem;
+  --ink-dark: #1a1712;
+  --arcade-yellow: #ffd23f;
+  --arcade-yellow-deep: #c19a16;
+  --ui-font:
+    ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif;
 }
 
-/* The enamel pin: the decision slip is pinned to the board like every slip. */
-
-.game-modal::before {
-  content: '';
-  position: absolute;
-  top: 0.55rem;
-  left: 0.55rem;
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--board);
-  border: 2px solid var(--yellow);
+.game-modal-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.85rem;
+  margin: 0 0 0.85rem;
 }
 
-.game-modal-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+.game-modal-emblem {
+  grid-row: span 2;
+  position: relative;
+  display: block;
+  aspect-ratio: 4 / 7;
+  width: 2.75rem;
+  overflow: hidden;
+  border-radius: 0.3rem;
+  background: #fffdf7;
+  transform: rotate(-6deg);
+  box-shadow: 0 0.35rem 0.7rem rgba(0, 0, 0, 0.4);
+}
+
+.game-modal-emblem[data-art-kind='none'] {
+  display: none;
+}
+
+.game-modal-kicker {
+  justify-self: start;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #ffd23f;
+  color: #1a1712;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
+.game-modal-title {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
 .game-modal-copy {
-  margin: 0 0 1.1rem;
+  margin: 0 0 0.9rem;
+  color: rgba(245, 241, 230, 0.85);
 }
 
 .game-modal-status {
   margin: 0;
 }
 
-/* WU8 correction pass: while the table is inert, a failed decision command is
-   mirrored inside the modal as the same coral alarm slip — one live alert,
-   never two. */
 .game-modal-error {
-  background: var(--game-placeholder-surface);
-  color: var(--game-danger-accent);
-  border: 2px solid var(--coral);
-  padding: 1rem;
-  display: grid;
-  justify-items: start;
-  gap: 0.55rem;
-  margin: 0 0 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0 0 0.9rem;
+  padding: 0.55rem 0.8rem;
+  border-radius: 0.9rem;
+  background: #ff6b57;
+  color: #fff;
 }
 
 .game-modal-cards {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin: 0 0 1.1rem;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.9rem;
+  margin: 0 0 1rem;
+  --card-w: clamp(6.5rem, 30vw, 8.5rem);
 }
 
 .game-modal-hand {
-  border: 1px dashed var(--paper-faded);
-  padding: 0.55rem 0.75rem 0.75rem;
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.55rem;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem 0.65rem;
+  border: 2px dashed rgba(245, 241, 230, 0.3);
+  border-radius: 1rem;
 }
 
 .game-modal-hand h3 {
   flex-basis: 100%;
   margin: 0;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  color: rgba(245, 241, 230, 0.74);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-align: center;
   text-transform: uppercase;
 }
 
 .game-decision-controls {
   display: flex;
   flex-wrap: wrap;
+  justify-content: center;
   gap: 0.55rem;
 }
 
@@ -933,79 +1808,139 @@ body {
   min-height: 3rem;
 }
 
-.game-decision-value {
-  min-width: 3.5rem;
+.game-decision-values {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.25rem, 1fr));
+  gap: 0.5rem;
+}
+
+.game-modal .game-decision-value,
+.game-decision-value-unavailable {
+  display: grid;
+  place-items: center;
+  min-width: 3rem;
+  min-height: 3.5rem;
+  padding: 0.2rem;
+  border-radius: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
 
-/* WU9 round result: the ended round is a centered pinned-paper slip inside
-   the table. It is information, not a mandatory decision: no scrim, no inert
-   table, no focus trap — the next round stays playable behind and around it.
-   Coral stays reserved for alarms, so the slip uses the paper voice. */
+.game-decision-value-number {
+  font-size: 1.35rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* The number is the visible label; the verb names the control for
+   assistive technology. */
+.game-decision-value-verb {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.game-modal .game-decision-value,
+.game-decision-value-unavailable {
+  position: relative;
+}
+
+.game-modal[data-decision='choose-deck-position'] .game-decision-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: 0.45rem;
+}
+
+.game-modal[data-decision='choose-deck-position'] .game-decision-button {
+  padding-inline: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.game-modal[data-decision='choose-deck-position'] .game-decision-button:first-child,
+.game-modal[data-decision='choose-deck-position'] .game-decision-button:last-child {
+  grid-column: 1 / -1;
+}
+
+.game-decision-value-unavailable {
+  border: 2px dashed rgba(245, 241, 230, 0.35);
+  color: rgba(245, 241, 230, 0.5);
+}
+
+.game-decision-value-unavailable .game-decision-value-number {
+  text-decoration: line-through;
+}
+
+/* ---- Round result (z 6, informational, never blocking) ------------------ */
 
 .game-round-result {
-  position: absolute;
+  position: fixed;
   top: 50%;
   left: 50%;
-  z-index: 20;
+  /* Above the table layers and the target picker, below mandatory modals. */
+  z-index: 35;
   width: min(30rem, calc(100% - 2rem));
   max-height: 90vh;
   overflow-y: auto;
-  scrollbar-color: var(--paper-faded) var(--paper);
-  background: var(--paper);
-  color: var(--paper-ink);
-  border: 1px solid var(--paper-ink);
-  padding: 1.5rem 1.75rem 1.6rem;
-  transform: translate(-50%, -50%) rotate(-0.7deg);
+  padding: 1.2rem 1.25rem 1.3rem;
+  border: 3px solid var(--arcade-gold);
+  border-radius: 1.5rem;
+  background: var(--hud-strong);
+  color: var(--ink);
+  text-align: center;
+  /* A dimmed table behind the result: the round winner is the moment. */
+  box-shadow:
+    0 0 0 100vmax rgba(5, 14, 18, 0.6),
+    0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, -50%);
+  animation: motion-result-enter 600ms ease-out;
+  --card-w: clamp(4.5rem, 18vw, 6rem);
 }
 
-/* The enamel pin: the result slip is pinned to the table like every slip. */
-
-.game-round-result::before {
-  content: '';
-  position: absolute;
-  top: 0.55rem;
-  left: 0.55rem;
-  width: 0.8rem;
-  height: 0.8rem;
-  border-radius: 50%;
-  background: var(--board);
-  border: 2px solid var(--yellow);
-}
-
-.game-round-result-title {
-  margin: 0 0 0.75rem;
+.game-round-result-title,
+.game-match-result-title {
+  margin: 0 0 0.5rem;
+  color: var(--arcade-gold);
   font-size: 1.35rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 900;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .game-round-result-winners,
-.game-round-result-reason {
-  margin: 0 0 0.35rem;
+.game-round-result-reason,
+.game-match-result-winners {
+  margin: 0 0 0.3rem;
 }
 
-.game-round-result-winners {
-  font-weight: 700;
+.game-round-result-winners,
+.game-match-result-winners {
+  font-size: 1.05rem;
+  font-weight: 800;
 }
 
 .game-round-result-awards,
-.game-round-result-reveals {
+.game-round-result-reveals,
+.game-match-result-totals {
   margin-top: 0.75rem;
 }
 
 .game-round-result-awards h3,
-.game-round-result-reveals h3 {
+.game-round-result-reveals h3,
+.game-match-result-totals h2 {
   margin: 0 0 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .game-round-result-awards ul,
-.game-round-result-reveals ul {
+.game-round-result-reveals ul,
+.game-match-result-totals ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -1014,83 +1949,133 @@ body {
 .game-round-result-reveals-list {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 0.55rem;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 0.5rem;
+  perspective: 40rem;
 }
 
 .game-round-result-continue {
   min-height: 3rem;
-  margin-top: 1.1rem;
+  margin-top: 1rem;
 }
 
-/* WU10 match result: a dedicated centered final surface that replaces the
-   playable table once the projection says MATCH_END. Same paper voice as the
-   round slip; no action, because the server has no rematch contract. */
+/* Revealed hand at the seat: flips face up in place (exhaustion only). */
+.game-seat-reveal {
+  grid-area: seat-hand;
+  justify-self: end;
+  --card-w: calc(var(--seat-back) * 2.2);
+  --card-radius: 0.3rem;
+  perspective: 30rem;
+  animation: motion-card-flip 360ms ease-out;
+}
+
+.game-player-zone[data-revealed='true'] .game-opponent-hand {
+  display: none;
+}
+
+.game-match-result-exit {
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+/* Per-player result preset: the art's blank panel holds this viewer's
+   own outcome text (positioned for the 1122x1402 preset layout). */
+.game-result-preset {
+  position: relative;
+  width: min(15rem, 62vw);
+  aspect-ratio: 1122 / 1402;
+  margin: -0.25rem auto 0.75rem;
+  animation: motion-preset-pop 520ms ease-out;
+}
+
+.game-result-preset-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 0.75rem 1.25rem rgba(0, 0, 0, 0.45));
+}
+
+.game-result-preset-text {
+  position: absolute;
+  top: 77%;
+  bottom: 7%;
+  left: 15%;
+  right: 15%;
+  display: grid;
+  place-content: center;
+  gap: 0.1rem;
+  color: #2a1d0c;
+  text-align: center;
+  line-height: 1.1;
+}
+
+.game-result-preset-text strong {
+  font-size: clamp(0.8rem, 3.6vw, 1rem);
+  font-weight: 900;
+}
+
+.game-result-preset-text span {
+  font-size: clamp(0.62rem, 2.8vw, 0.78rem);
+  font-weight: 700;
+}
+
+.game-result-preset[data-outcome='defeat'] .game-result-preset-text {
+  color: #2a2440;
+}
+
+@keyframes motion-preset-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.85) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ---- Match result -------------------------------------------------------- */
 
 .game-match-result {
-  /* The match result replaces the table, so it respects the viewport insets
-     itself: the width shrinks by the horizontal insets and the top margin is
-     at least the safe-area inset (env() is 0 without viewport-fit=cover, so
-     the unchanged desktop layout is preserved). */
   width: min(
     30rem,
     calc(100% - 2rem - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))
   );
   margin: max(3rem, env(safe-area-inset-top)) auto 0;
-  background: var(--paper);
-  color: var(--paper-ink);
-  border: 1px solid var(--paper-ink);
-  padding: 1.75rem 2rem 1.9rem;
+  padding: 1.5rem 1.5rem 1.6rem;
+  border: 3px solid var(--arcade-gold, #ffc53d);
+  border-radius: 1.5rem;
+  background: var(--hud-strong, #0a1a20);
+  color: var(--ink, #f5f1e6);
+  text-align: center;
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+  animation: motion-result-enter 700ms ease-out;
 }
 
-.game-match-result-title {
-  margin: 0 0 0.75rem;
-  font-size: 1.35rem;
+.game-match-result-totals li {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(245, 241, 230, 0.12);
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.game-match-result-winners {
-  margin: 0 0 0.35rem;
-  font-weight: 700;
-}
-
-.game-match-result-totals {
-  margin-top: 0.75rem;
-}
-
-.game-match-result-totals h2 {
-  margin: 0 0 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-
-.game-match-result-totals ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
 }
 
 .game-match-result-note {
-  margin: 1.1rem 0 0;
-  color: var(--paper-faded);
+  margin: 1rem 0 0;
+  color: var(--ink-soft, rgba(245, 241, 230, 0.74));
 }
 
-/* M8 card-action motion: one-shot destination cues derived only from the
-   reducer-owned motion cues plus the authoritative projection. Transform
-   and opacity only — never layout — 180–320ms, no loops, and the resting
-   state equals the animated end state, so reduced-motion removal changes
-   nothing but the movement. Controls never live on an animated surface:
-   zone-level cues animate the zone's non-interactive hand surface only, and
-   one-shot replays remount only keyed non-interactive surfaces. */
+/* ==========================================================================
+   Motion: presentation-only, consumed after the authoritative projection.
+   Transform and opacity only, no layout. Resting state equals the animated
+   end state, so the reduced-motion collapse removes only movement.
+   ========================================================================== */
 
 @keyframes motion-draw-settle {
   from {
-    opacity: 0.35;
-    transform: translateY(-0.4rem);
+    opacity: 0.2;
+    transform: translateY(-1.25rem) scale(0.9);
   }
   to {
     opacity: 1;
@@ -1100,8 +2085,8 @@ body {
 
 @keyframes motion-card-landing {
   from {
-    opacity: 0.4;
-    transform: translateY(-0.6rem);
+    opacity: 0.3;
+    transform: translateY(-1rem) scale(1.15);
   }
   to {
     opacity: 1;
@@ -1119,22 +2104,25 @@ body {
 }
 
 @keyframes motion-hand-shuffle {
-  from {
-    opacity: 0.55;
-    transform: translateY(0.2rem);
+  0% {
+    opacity: 0.5;
+    transform: translateX(0.6rem) rotate(-10deg);
   }
-  to {
+  60% {
+    transform: translateX(-0.2rem) rotate(4deg);
+  }
+  100% {
     opacity: 1;
     transform: none;
   }
 }
 
 @keyframes motion-hand-exchange {
-  from {
-    opacity: 0.55;
-    transform: translateY(0.25rem);
+  0% {
+    opacity: 0.4;
+    transform: translateY(0.5rem) scale(0.9);
   }
-  to {
+  100% {
     opacity: 1;
     transform: none;
   }
@@ -1142,7 +2130,7 @@ body {
 
 @keyframes motion-effect-settle {
   from {
-    transform: translateY(0.25rem);
+    transform: translateY(0.3rem);
   }
   to {
     transform: none;
@@ -1150,151 +2138,79 @@ body {
 }
 
 .game-opponent-hand[data-motion='draw-settle'] {
-  animation: motion-draw-settle 240ms ease-out;
+  animation: motion-draw-settle 320ms ease-out;
 }
 
-/* The landing/flip targets the newest public shell of the marked pile; the
-   pile-count paragraph is a different element type, so :last-of-type is
-   exactly the newest card. */
 .game-discards[data-motion='card-landing'] .game-discard-slot:last-of-type .game-card-placeholder {
-  animation: motion-card-landing 280ms ease-out;
+  animation: motion-card-landing 340ms ease-out;
 }
 
 .game-discards[data-motion='card-flip'] .game-discard-slot:last-of-type .game-card-placeholder {
-  animation: motion-card-flip 220ms ease-out;
+  animation: motion-card-flip 300ms ease-out;
 }
 
-/* The round-result slip's reveal shells sit outside any discard pile, so the
-   flip must reach them directly on the marked shell itself. */
 .game-round-result-reveals-list .game-card-placeholder[data-motion='card-flip'] {
-  animation: motion-card-flip 220ms ease-out;
+  animation: motion-card-flip 300ms ease-out;
 }
 
-/* The center-action stage mirrors the destination cue at the table's
-   center: an absolutely positioned, centered, pointer-events-none overlay
-   spanning the shared center. It never participates in the center grid —
-   the draw and hidden piles keep their two-up track — and its base opacity
-   is 0, so it is visually absent before its cue and after it. Its own
-   stage-specific keyframes end back at opacity 0; the destination keyframes
-   (which end visible) are never reused here. In reduced motion the
-   animation collapses and the stage stays hidden: the authoritative
-   destination already carries the final state and text. */
-.game-center-stage {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  pointer-events: none;
-  opacity: 0;
-}
-
-@keyframes motion-stage-landing {
-  from {
-    opacity: 1;
-    transform: translateY(-0.6rem);
-  }
-  to {
+@keyframes motion-announce {
+  0% {
     opacity: 0;
-    transform: none;
+    transform: translate(-50%, -50%) scale(0.7);
   }
-}
-
-@keyframes motion-stage-flip {
-  from {
+  12% {
     opacity: 1;
-    transform: rotateY(90deg);
+    transform: translate(-50%, -50%) scale(1.05);
   }
-  to {
+  20%,
+  82% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
     opacity: 0;
-    transform: none;
+    transform: translate(-50%, -60%) scale(0.96);
   }
-}
-
-.game-center-stage[data-motion='card-landing'] {
-  animation: motion-stage-landing 280ms ease-out;
-}
-
-.game-center-stage[data-motion='card-flip'] {
-  animation: motion-stage-flip 220ms ease-out;
 }
 
 .game-players[data-motion='hand-shuffle'] .game-card-placeholder-back {
-  animation: motion-hand-shuffle 320ms ease-out;
+  animation: motion-hand-shuffle 420ms ease-in-out;
 }
 
-/* Zone-level cues are attributed on the zone but animate only its
-   non-interactive hand surface: the zone subtree hosts keyboard-focusable
-   target controls, so it never remounts and never animates as a whole. */
 .game-player-zone[data-motion='hand-exchange'] .game-opponent-hand {
-  animation: motion-hand-exchange 300ms ease-out;
+  animation: motion-hand-exchange 420ms ease-in-out;
 }
 
 .game-player-zone[data-motion='effect-settle'] .game-opponent-hand {
   animation: motion-effect-settle 200ms ease-out;
 }
 
-/* Textual origin stamps on public discard shells: static copy that persists
-   with or without motion, in the system's tag voice. */
-.game-card-origin {
-  grid-column: 1 / -1;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--paper-ink);
-}
-
-/* Forced-play shells are strengthened structurally — a pinned marker plus a
-   heavier committed border — never by hue alone; the textual origin stamp
-   carries the meaning either way. */
-.game-discard-slot {
-  display: grid;
-  justify-items: start;
-  gap: 0.2rem;
-}
-
-.game-discard-slot[data-forced='true'] {
-  border: 2px solid var(--game-placeholder-ink);
-  padding: 0.35rem;
-}
-
-.game-discard-slot-pin {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--game-placeholder-ink);
-}
-
-/* M8 status-channel motion: one-shot cues for the persistent table states
-   (protection activation/expiry, victory-token awards). Transform and opacity
-   only, 180–320ms, no loops; the persistent text and state always remain. */
-
 @keyframes motion-protection-settle {
-  from {
-    opacity: 0.4;
-    transform: translateY(0.15rem) scale(0.94);
+  0% {
+    opacity: 0.9;
+    transform: scale(0.6);
   }
-  to {
-    opacity: 1;
-    transform: none;
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
   }
 }
 
 @keyframes motion-protection-expire {
   from {
-    opacity: 0.5;
-    transform: translateY(0.12rem);
+    opacity: 0.6;
+    transform: none;
   }
   to {
-    opacity: 1;
-    transform: none;
+    opacity: 0;
+    transform: scale(0.8);
   }
 }
 
 @keyframes motion-token-settle {
   from {
-    opacity: 0.45;
-    transform: translateY(-0.25rem);
+    opacity: 0.4;
+    transform: translateY(-0.3rem) scale(0.92);
   }
   to {
     opacity: 1;
@@ -1302,255 +2218,279 @@ body {
   }
 }
 
-/* The keyed non-interactive pulse layers: each one-shot status cue mounts a
-   small sequence-stamped visual child on its stable visible surface — the
-   always-rendered status list (an expiry stays perceivable there even after
-   the badge is gone) and the token rack. Replaying a cue remounts only the
-   pulse, never the interactive zone subtree, and consecutive same-kind cues
-   retrigger by their batch sequence. */
-.game-status-pulse {
-  align-self: center;
-  width: 1.4rem;
-  height: 0.45rem;
-  border-radius: 2px;
-  background: currentColor;
-}
-
-.game-token-pulse {
-  width: 1.4rem;
-  height: 0.45rem;
-  border-radius: 2px;
-  background: var(--game-placeholder-ink);
+@keyframes motion-pulse-ring {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.4);
+  }
 }
 
 .game-status-pulse[data-motion='protection-settle'] {
-  animation: motion-protection-settle 220ms ease-out;
+  animation: motion-protection-settle 360ms ease-out;
 }
 
 .game-status-pulse[data-motion='protection-expire'] {
-  animation: motion-protection-expire 200ms ease-out;
+  animation: motion-protection-expire 260ms ease-out;
 }
 
 .game-token-pulse[data-motion='token-settle'] {
-  animation: motion-token-settle 240ms ease-out;
+  /* The shared token cue plus a fading ring; the ring is listed last, so it
+     owns opacity/transform and the layer ends invisible at its base state. */
+  animation:
+    motion-token-settle 320ms ease-out,
+    motion-pulse-ring 520ms ease-out;
 }
 
 .game-round-result-awards li[data-motion='token-settle'] {
-  animation: motion-token-settle 240ms ease-out;
+  animation: motion-token-settle 320ms ease-out;
 }
 
-/* The semantic victory-token rack: committed counts printed in text, each
-   token a pinned chip — readable without color, motion, or artwork. */
-.game-token-rack {
-  display: grid;
-  justify-items: start;
-  gap: 0.35rem;
+/* Low-priority ambient cues: soft, slow, never high intensity. */
+@keyframes motion-turn-halo {
+  0% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.45);
+  }
 }
 
-.game-token-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
+@keyframes motion-deck-ready {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.2rem);
+  }
 }
 
-.game-token-slot {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border: 1px solid var(--game-placeholder-ink);
-  padding: 0.05rem 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+@keyframes motion-turn-banner {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.game-token-dot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: var(--game-placeholder-ink);
+@keyframes motion-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
-.game-token-total {
-  margin: 0;
-  font-size: 0.85rem;
+@keyframes motion-result-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-.game-discard-count {
-  flex-basis: 100%;
-  margin: 0;
-  font-size: 0.85rem;
-}
+/* ---- Viewport bands ------------------------------------------------------ */
 
 @media (max-width: 46rem) {
-  /* M8 mobile band (320px floor included): the own hand is the dominant
-     surface; the center piles run compact two-up when the content fits and
-     stack to one column at the 320px floor; opponent zones stay compact but
-     keep every status, discard, and target available. The center piles keep
-     the base two-up composition; only the 320px floor below overrides it. */
-  .game-table {
-    gap: 0.75rem;
+  /* Mobile priority: own hand, current action, targets, stage, opponents. */
+  .table-scene {
+    padding-inline: max(0.5rem, env(safe-area-inset-left)) max(0.5rem, env(safe-area-inset-right));
   }
 
-  .game-player-list {
-    grid-template-columns: minmax(0, 1fr);
+  .game-own-hand {
+    padding-bottom: 0.25rem;
   }
 
-  .game-card-placeholder {
-    max-width: 100%;
-  }
-
-  /* The 10.5rem cap (not the base 13rem) keeps the own hand dominant here. A
-     min-width floor would be inert: each card resolves to
-     min(full panel width, 10.5rem), which never drops below 8.5rem in this
-     band, so only the cap is declared. */
-  .game-own-hand .game-card-placeholder {
-    max-width: 10.5rem;
-  }
-
-  /* The pile controls keep their one-line labels at two-up widths while
-     holding the 3rem touch target; the 320px floor below releases the wrap
-     lock so the label may use the full available width. */
   .game-pile .action-button {
     width: 100%;
     min-width: 0;
     padding-inline: 0.5rem;
-    font-size: 0.95rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .game-player-zone {
+    flex: 1 1 calc(50% - 0.35rem);
+    width: auto;
+  }
+
+  .game-player-self-tag {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
     white-space: nowrap;
   }
 }
 
-/* The 320px floor: two-up no longer fits safely, so the compact piles stack
-   and every shell goes fluid. No horizontal overflow at the narrowest phone. */
+/* The 320px floor: tighter seats and piles, every value and control kept. */
 @media (max-width: 22.5rem) {
-  .game-center {
-    grid-template-columns: minmax(0, 1fr);
+  .game-table {
+    --hand-card: 7rem;
+    --pile-card: 3.4rem;
+    gap: 0.35rem;
   }
 
-  .game-card-placeholder,
-  .game-card-placeholder-back {
-    min-width: 0;
-    width: 100%;
-    max-width: 12rem;
+  .game-player-zone {
+    width: 8.9rem;
+    padding: 0.3rem 0.35rem;
   }
 
-  /* Single-column floor: the pile button may wrap to use the width it already
-     owns instead of forcing a nowrap overflow. */
+  .game-player-name {
+    font-size: 0.85rem;
+  }
+
+  .game-seat-avatar {
+    width: 1.9rem;
+    height: 1.9rem;
+  }
+
   .game-pile .action-button {
     white-space: normal;
   }
 }
 
-/* M8 tablet/landscape band (46rem and up): a content-driven breakpoint
-   approved to finish M8 (DESIGN.md layout note deferred to closure). The
-   table topology appears — center action and player zones around/above —
-   while the own hand stays a full-width bottom band. Reading order is
-   untouched. The layer is min-width-only: the later min-width: 64rem desktop
-   layer overrides it by source cascade, so 46rem and every viewport above it
-   are continuously covered — no exclusive 63.99rem-style upper bound can
-   leave a fractional-viewport gap. */
+/* Tablet and up (46rem): seats sit around the tilted table like a digital
+   card game — opponents left, top, and right; the viewer bottom-left beside
+   the hand. Min-width only; the desktop layer overrides it by cascade. */
 @media (min-width: 46rem) {
   .game-table {
+    --hand-card: clamp(7.5rem, min(14vw, 19vh), 9.5rem);
+    --pile-card: clamp(4.5rem, min(8vw, 12vh), 5.75rem);
+    --seat-back: 1.5rem;
     grid-template-areas:
-      'game-table-heading game-table-heading'
-      'game-center game-center'
-      'game-players game-players'
-      'game-own-hand game-own-hand';
-    align-content: start;
+      'game-table-heading'
+      'game-center'
+      'game-own-hand';
+    grid-template-rows: auto minmax(18rem, 1fr) auto;
+    align-content: stretch;
   }
 
   .game-table:has(> .game-error) {
     grid-template-areas:
-      'game-error game-error'
-      'game-table-heading game-table-heading'
-      'game-center game-center'
-      'game-players game-players'
-      'game-own-hand game-own-hand';
-  }
-}
-
-/* M8 desktop band (64rem and up): the table is the protagonist. Declared
-   after the min-width-only tablet layer with equal specificity, every shared
-   declaration here overrides the tablet layer by source cascade. The center
-   action owns the visual center; player zones arrange around it; the own hand
-   sits as the bottom band. No dashboard grids: the center spans the full width
-   and the player zones arc under it. */
-@media (min-width: 64rem) {
-  /* A genuine table topology, not six equal rows: the shared center is the
-     dominant surface (two of three columns) with the public player arc seated
-     beside it, and the viewer's own hand stays one full-width bottom band —
-     the seat you play from. The semantic DOM order is untouched: grid areas
-     only rearrange the visuals. Rows are compact (auto / flexing center /
-     auto hand) so at 1280x900 the own hand enters the first viewport. */
-  .game-table {
-    grid-template-areas:
-      'game-table-heading game-table-heading game-table-heading'
-      'game-center game-center game-players'
-      'game-own-hand game-own-hand game-own-hand';
-    grid-template-rows: auto minmax(0, 1fr) auto;
-    align-content: start;
+      'game-error'
+      'game-table-heading'
+      'game-center'
+      'game-own-hand';
+    grid-template-rows: auto auto minmax(18rem, 1fr) auto;
   }
 
-  .game-table:has(> .game-error) {
-    grid-template-areas:
-      'game-error game-error game-error'
-      'game-table-heading game-table-heading game-table-heading'
-      'game-center game-center game-players'
-      'game-own-hand game-own-hand game-own-hand';
+  .game-table::before {
+    margin-inline: 7rem;
+    margin-block: 2.5rem 0.5rem;
   }
 
-  .game-center {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    align-content: start;
-    padding: 1.25rem;
-  }
-
-  /* The center stage card reads as the table's focal action. The public player
-     arc packs two compact seats per row so it cannot force the viewer's hand
-     below the first desktop viewport; 4+ seats continue on following rows. */
+  /* Seats overlay the stage cell and are placed by slot. */
   .game-players {
-    align-content: start;
+    grid-row: game-center-start / game-own-hand-end;
+    grid-column: 1 / -1;
+    pointer-events: none;
   }
 
   .game-player-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: absolute;
+    inset: 0;
+    display: block;
   }
 
-  .game-player-header {
-    align-items: flex-start;
-    flex-wrap: wrap;
+  .game-player-zone {
+    position: absolute;
+    width: 10.5rem;
+    pointer-events: auto;
   }
 
-  .game-player-presence {
-    margin-left: auto;
+  .game-player-zone[data-seat-slot='top'] {
+    top: 0;
+    left: 50%;
+    translate: -50% 0;
   }
 
-  .game-player-zone .game-card-placeholder-back {
-    width: var(--game-card-compact-inline);
-    min-width: 0;
-    max-width: var(--game-card-compact-inline);
+  .game-player-zone[data-seat-slot='top-left'] {
+    top: 0;
+    left: 16%;
   }
 
-  .game-own-hand .game-card-placeholder {
-    max-width: 9rem;
+  .game-player-zone[data-seat-slot='top-right'] {
+    top: 0;
+    right: 16%;
+  }
+
+  .game-player-zone[data-seat-slot='left'] {
+    top: 32%;
+    left: 1%;
+  }
+
+  .game-player-zone[data-seat-slot='right'] {
+    top: 32%;
+    right: 1%;
+  }
+
+  .game-player-zone[data-seat-slot='bottom'] {
+    bottom: 0.5rem;
+    left: 0;
+  }
+
+  .game-center {
+    padding-block: 3.5rem 1.5rem;
   }
 }
 
-/* Selection, caret, and scrollbar surfaces are themed from the palette. */
+@media (min-width: 64rem) {
+  .game-table {
+    --hand-card: clamp(8.5rem, min(11vw, 20vh), 10.5rem);
+    --pile-card: clamp(5rem, min(6vw, 12vh), 6.5rem);
+    --seat-back: 1.7rem;
+    grid-template-areas:
+      'game-table-heading'
+      'game-center'
+      'game-own-hand';
+    grid-template-rows: auto minmax(20rem, 1fr) auto;
+  }
 
-::selection {
-  background: var(--yellow);
-  color: var(--paper-ink);
-}
+  .game-table:has(> .game-error) {
+    grid-template-areas:
+      'game-error'
+      'game-table-heading'
+      'game-center'
+      'game-own-hand';
+    grid-template-rows: auto auto minmax(20rem, 1fr) auto;
+  }
 
-/* Accessibility: keyboard focus is always visible; motion is optional. */
+  .game-table::before {
+    margin-inline: 12rem;
+  }
 
-:focus-visible {
-  box-shadow: 0 0 0 2px var(--yellow);
-  outline: 3px solid var(--paper-ink);
-  outline-offset: 2px;
+  .game-player-zone {
+    width: 11.5rem;
+  }
+
+  .game-player-zone[data-seat-slot='left'],
+  .game-player-zone[data-seat-slot='right'] {
+    top: 30%;
+  }
+
+  .game-player-zone[data-seat-slot='left'] {
+    left: 4%;
+  }
+
+  .game-player-zone[data-seat-slot='right'] {
+    right: 4%;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1567,22 +2507,18 @@ body {
     transform: none;
   }
 
-  /* The result slip keeps its centering translation but drops the pinned
-     rotation: `transform: none` here would also remove translate(-50%, -50%)
-     and throw the absolutely-positioned slip off-center. */
+  /* The result slip keeps its centering translation. */
   .game-round-result {
     transform: translate(-50%, -50%);
   }
 
-  /* M8: every motion cue hook collapses to its final state. The resting state
-     already equals the animated end state, so only the movement is removed —
-     final states and textual labels are fully preserved. The keyed status and
-     token pulse layers collapse exactly like every other hook. The armed
-     card-lift animation collapses with the same universal `animation: none`;
-     the armed selection ring and outline (layout-safe, non-spatial) still
-     mark the selection. */
+  /* Every motion hook collapses to its final state: travel, flips, lifts,
+     and hover scaling are removed while states, rings, chips, and text
+     remain. The center stage keeps its base opacity 0, so it stays hidden. */
   [data-motion],
-  [data-motion] .game-card-placeholder {
+  [data-motion] .game-card-placeholder,
+  .game-hand-entry .game-card-placeholder,
+  .game-hand-entry[data-playable='true']:hover .game-card-placeholder {
     animation: none !important;
     transform: none !important;
   }

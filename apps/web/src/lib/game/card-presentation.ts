@@ -36,69 +36,72 @@ const PRESENTATIONS: readonly (PresentationDefinition & { type: CardType })[] = 
     type: 'ROBOT_ASPIRADOR_REAL',
     value: 0,
     name: 'Robot Aspirador Real',
-    effectSummary: 'Defeats a Rey Gato holder in the end-of-round comparison.',
+    effectSummary: 'Derrota a quien tenga al Rey Gato en la comparación de fin de ronda.',
   },
   {
     type: 'PECERA_DE_CRISTAL',
     value: 1,
     name: 'Pecera de Cristal',
-    effectSummary: 'Guess another player’s hand value; a correct guess eliminates them.',
+    effectSummary: 'Apostá el valor de la mano de otro jugador; si acertás, queda eliminado.',
   },
   {
     type: 'RATON_TRAMPERO',
     value: 2,
     name: 'Ratón Trampero',
-    effectSummary: 'Secretly peek at the draw pile’s top card and reinsert it anywhere.',
+    effectSummary: 'Mirá en secreto la carta superior del mazo y reinsertala donde quieras.',
   },
   {
     type: 'CONEJITO_GUERRILLERO',
     value: 3,
     name: 'Conejito Guerrillero',
-    effectSummary: 'Compare hands with another player; the lower value is eliminated.',
+    effectSummary: 'Compará manos con otro jugador; el valor más bajo queda eliminado.',
   },
   {
     type: 'CAPARAZON_ARMAZON',
     value: 4,
     name: 'Caparazón Armazón',
-    effectSummary: 'Protect yourself from targeted effects until your next turn.',
+    effectSummary: 'Protegete de efectos dirigidos hasta tu próximo turno.',
   },
   {
     type: 'SERPIENTE_ENCANTADORA',
     value: 5,
     name: 'Serpiente Encantadora',
-    effectSummary: 'Force another player to reveal their hand card face up and redraw.',
+    effectSummary: 'Obligá a otro jugador a revelar su carta y robar una nueva.',
   },
   {
     type: 'SAQUEADOG_DE_TUMBAS',
     value: 6,
     name: 'Saqueadog de Tumbas',
-    effectSummary: 'Peek at the hidden card and optionally swap it with your hand.',
+    effectSummary: 'Mirá la carta oculta y decidí si querés cambiarla por la de tu mano.',
   },
   {
     type: 'MALABARISTA_DE_OCHO_PATAS',
     value: 7,
     name: 'Malabarista de Ocho Patas',
-    effectSummary: 'Everyone returns their hand to the draw pile and draws a fresh card.',
+    effectSummary: 'Todos devuelven su mano al mazo y roban una carta nueva.',
   },
   {
     type: 'ERMITANO_BUSCA_CASA',
     value: 8,
     name: 'Ermitaño Busca Casa',
-    effectSummary: 'Swap your hand card with another player’s, both unrevealed.',
+    effectSummary: 'Cambiá tu carta por la de otro jugador sin revelar ninguna.',
   },
   {
     type: 'NO_SOY_UNA_MASCOTA',
     value: 9,
     name: '¡No soy una mascota!',
-    effectSummary: 'Force a Rey Gato holder to trade it for the card in your hand.',
+    effectSummary: 'Obligá a quien tenga al Rey Gato a cambiarlo por la carta de tu mano.',
   },
   {
     type: 'REY_GATO',
     value: 10,
     name: 'Rey Gato',
-    effectSummary: 'Eliminates its holder the moment it is placed face up.',
+    effectSummary: 'Elimina a quien lo tenga en cuanto queda boca arriba.',
   },
 ];
+
+/** Every printed card value in catalog order (0-10), for value pickers. */
+export const CARD_VALUES: readonly number[] = PRESENTATIONS.map((definition) => definition.value);
 
 const BY_TYPE = new Map<CardType, PresentationDefinition>(
   PRESENTATIONS.map((definition) => [definition.type, definition]),

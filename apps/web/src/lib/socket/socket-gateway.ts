@@ -14,6 +14,7 @@ import {
   type RoomCreateData,
   type RoomJoinData,
   type RoomLeaveData,
+  type RoomReturnToLobbyData,
   type RoomSnapshot,
   type RoomStartData,
   type SystemPingData,
@@ -25,6 +26,7 @@ import type {
   GameCommandAck,
   JoinMembershipAck,
   LeaveRoomAck,
+  ReturnToLobbyAck,
   RoomFlowGateway,
   StartMatchAck,
 } from '@/lib/room-flow/controller';
@@ -165,6 +167,10 @@ export class SocketRoomFlowGateway implements RoomFlowGateway {
 
   leaveRoom(input: { code: string }): Promise<LeaveRoomAck> {
     return this.request<RoomLeaveData>(ClientEvents.roomLeave, input);
+  }
+
+  returnToLobby(input: { code: string }): Promise<ReturnToLobbyAck> {
+    return this.request<RoomReturnToLobbyData>(ClientEvents.roomReturnToLobby, input);
   }
 
   /** Sends one exact engine turn command for the seated room. */

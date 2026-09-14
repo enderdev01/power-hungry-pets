@@ -9,23 +9,23 @@ import { CardPlaceholder } from '@/components/game/card-placeholder';
 describe('card placeholder shell (M7 baseline)', () => {
   it('renders a face-up shell with value, name, and honest aria labeling', () => {
     render(<CardPlaceholder card={{ value: 10, type: 'REY_GATO' }} />);
-    const shell = screen.getByLabelText('Rey Gato, value 10');
+    const shell = screen.getByLabelText('Rey Gato, valor 10');
     expect(shell).toHaveAttribute('data-visual-placeholder', 'card');
     expect(screen.getByText('10')).toBeInTheDocument();
   });
 
   it('renders a face-down back with its label and no card identity', () => {
-    render(<CardPlaceholder faceDown label="Face-down card 1" />);
-    const back = screen.getByRole('img', { name: 'Face-down card 1' });
+    render(<CardPlaceholder faceDown label="Carta boca abajo 1" />);
+    const back = screen.getByRole('img', { name: 'Carta boca abajo 1' });
     expect(back).toHaveAttribute('data-visual-placeholder', 'card-back');
-    expect(back).toHaveTextContent('Face down');
+    expect(back).toHaveTextContent('Boca abajo');
   });
 });
 
 describe('card placeholder motion hooks (M8)', () => {
   it('carries one-shot motion hooks exactly when a plan addresses the shell', () => {
     const { rerender } = render(<CardPlaceholder card={{ value: 10, type: 'REY_GATO' }} />);
-    let shell = screen.getByLabelText('Rey Gato, value 10');
+    let shell = screen.getByLabelText('Rey Gato, valor 10');
     expect(shell).not.toHaveAttribute('data-motion');
     expect(shell).not.toHaveAttribute('data-motion-sequence');
 
@@ -35,7 +35,7 @@ describe('card placeholder motion hooks (M8)', () => {
         motion={{ kind: 'card-flip', sequence: 3 }}
       />,
     );
-    shell = screen.getByLabelText('Rey Gato, value 10');
+    shell = screen.getByLabelText('Rey Gato, valor 10');
     expect(shell).toHaveAttribute('data-motion', 'card-flip');
     expect(shell).toHaveAttribute('data-motion-sequence', '3');
   });
@@ -44,11 +44,11 @@ describe('card placeholder motion hooks (M8)', () => {
     render(
       <CardPlaceholder
         card={{ value: 5, type: 'SERPIENTE_ENCANTADORA' }}
-        originLabel="Forced face up"
+        originLabel="Forzada boca arriba"
       />,
     );
-    const shell = screen.getByLabelText('Serpiente Encantadora, value 5');
-    expect(shell).toHaveTextContent('Forced face up');
+    const shell = screen.getByLabelText('Serpiente Encantadora, valor 5');
+    expect(shell).toHaveTextContent('Forzada boca arriba');
   });
 
   it('renders no origin label when none is provided', () => {
@@ -57,8 +57,8 @@ describe('card placeholder motion hooks (M8)', () => {
   });
 
   it('never puts motion or origin hooks on a face-down back', () => {
-    render(<CardPlaceholder faceDown label="Face-down card 2" />);
-    const back = screen.getByRole('img', { name: 'Face-down card 2' });
+    render(<CardPlaceholder faceDown label="Carta boca abajo 2" />);
+    const back = screen.getByRole('img', { name: 'Carta boca abajo 2' });
     expect(back).not.toHaveAttribute('data-motion');
     expect(back).not.toHaveAttribute('data-motion-sequence');
     expect(back.querySelector('.game-card-origin')).toBeNull();

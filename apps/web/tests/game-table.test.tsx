@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
+import { TABLETOP_ASSET_CONFIG } from '@/lib/game/card-assets';
 import { createInitialRoomFlowState, type RoomFlowState } from '@/lib/room-flow/reducer';
 import type { GameState } from '@/lib/game/game-reducer';
 import {
@@ -50,6 +51,7 @@ function controllerStub() {
     chooseHiddenSwap: jest.fn<ReturnType<RoomFlowController['chooseHiddenSwap']>, [boolean]>(),
     chooseDeckPosition: jest.fn<ReturnType<RoomFlowController['chooseDeckPosition']>, [number]>(),
     retry: jest.fn<ReturnType<RoomFlowController['retry']>, []>(),
+    returnToLobby: jest.fn<ReturnType<RoomFlowController['returnToLobby']>, []>(),
   } as unknown as Pick<
     RoomFlowController,
     | 'drawCard'
@@ -59,6 +61,7 @@ function controllerStub() {
     | 'chooseHiddenSwap'
     | 'chooseDeckPosition'
     | 'retry'
+    | 'returnToLobby'
   >;
 }
 
@@ -146,7 +149,7 @@ describe('game table shell', () => {
         state={flowState({ publicView: null, privateView: null })}
       />,
     );
-    expect(screen.getByRole('status')).toHaveTextContent(/table is being prepared/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/preparando la mesa/i);
     // No invented state: the roster's names must not be rendered as players.
     expect(screen.queryByText('Bruno')).toBeNull();
     expect(screen.queryByText(/your hand/i, { selector: '[data-hand-ready="true"]' })).toBeNull();
@@ -157,12 +160,12 @@ describe('game table shell', () => {
     expect(screen.getByText('Bruno')).toBeInTheDocument();
     expect(screen.getByText('Ana')).toBeInTheDocument();
     // Opponent hand is a face-down placeholder count, never a value.
-    expect(screen.getByRole('group', { name: '2 face-down cards' })).toBeInTheDocument();
-    expect(screen.getByRole('group', { name: '1 face-down card' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '2 cartas boca abajo' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: '1 carta boca abajo' })).toBeInTheDocument();
     // Victory tokens, protection, and connection render as labeled text.
-    expect(screen.getByText(/1 victory token/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/protected/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/at the table/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/1 ficha de victoria/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/protegido/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/en la mesa/i).length).toBeGreaterThan(0);
   });
 
   it('renders public discards with value and name, never an instance id', () => {
@@ -204,13 +207,13 @@ describe('game table shell', () => {
         state={flowState({ publicView: eliminated })}
       />,
     );
-    expect(screen.getAllByText(/eliminated/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/eliminado/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/Rey Gato/i)).toBeInTheDocument();
   });
 
   it('renders the current-turn text from the authoritative phase', () => {
     render(<GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />);
-    expect(screen.getByText(/Waiting for Bruno to play a card/i)).toBeInTheDocument();
+    expect(screen.getByText(/Esperando a que Bruno juegue una carta/i)).toBeInTheDocument();
   });
 
   it('uses the authoritative phase in the current-turn prompt', () => {
@@ -221,7 +224,7 @@ describe('game table shell', () => {
         state={flowState({ publicView: playTurn })}
       />,
     );
-    expect(screen.getByText(/YOUR TURN — play a card/i)).toBeInTheDocument();
+    expect(screen.getByText(/TU TURNO — jugá una carta/i)).toBeInTheDocument();
 
     const drawTurn = publicView({
       round: roundView({ currentPlayerId: SELF_ID, phase: 'DRAW_REQUIRED' }),
@@ -232,7 +235,7 @@ describe('game table shell', () => {
         state={flowState({ publicView: drawTurn })}
       />,
     );
-    expect(screen.getByText(/YOUR TURN — draw a card/i)).toBeInTheDocument();
+    expect(screen.getByText(/TU TURNO — robá una carta/i)).toBeInTheDocument();
   });
 
   it('announces a public pending decision without revealing private data', () => {
@@ -247,15 +250,15 @@ describe('game table shell', () => {
         state={flowState({ publicView: pending })}
       />,
     );
-    expect(screen.getByText(/Bruno is resolving Ratón Trampero/i)).toBeInTheDocument();
+    expect(screen.getByText(/Bruno está resolviendo Ratón Trampero/i)).toBeInTheDocument();
   });
 
   it('renders draw-pile count and hidden-card presence without identity', () => {
     render(<GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />);
-    expect(screen.getByText(/^18 cards$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^1 face down$/i)).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Draw pile, face down' })).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Hidden card, face down' })).toBeInTheDocument();
+    expect(screen.getByText(/^18 cartas$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 boca abajo$/i)).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Mazo boca abajo' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Carta oculta boca abajo' })).toBeInTheDocument();
   });
 
   it('renders the own face-up hand only from the viewer-matched private view', () => {
@@ -292,7 +295,7 @@ describe('game table shell', () => {
         state={flowState({ privateView: privateView(OTHER_ID) })}
       />,
     );
-    expect(screen.getByText(/hand has not arrived yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/tu mano todavía no llegó/i)).toBeInTheDocument();
     expect(screen.queryByText(/Malabarista de Ocho Patas/i)).toBeNull();
   });
 
@@ -303,7 +306,7 @@ describe('game table shell', () => {
         state={flowState({ privateView: null })}
       />,
     );
-    expect(screen.getByText(/hand has not arrived yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/tu mano todavía no llegó/i)).toBeInTheDocument();
   });
 
   it('renders no gameplay controls from an empty legalActions projection', () => {
@@ -336,8 +339,8 @@ describe('game table shell', () => {
         state={flowState({ matchEnded: true, matchWinners: [OTHER_ID] })}
       />,
     );
-    expect(screen.queryByRole('status', { name: 'Match result' })).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent(/Waiting for Bruno/i);
+    expect(screen.queryByRole('status', { name: 'Resultado de la partida' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(/Esperando a que Bruno/i);
   });
 });
 
@@ -368,24 +371,49 @@ describe('game table match result (WU10)', () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={matchEndState()} />,
     );
-    const result = screen.getByRole('status', { name: 'Match result' });
-    expect(within(result).getByText(/the match is over/i)).toBeInTheDocument();
-    expect(within(result).getByText('Ana wins the match.')).toBeInTheDocument();
+    const result = screen.getByRole('status', { name: 'Resultado de la partida' });
+    expect(within(result).getByText(/la partida terminó/i)).toBeInTheDocument();
+    expect(within(result).getByText('Ana gana la partida.')).toBeInTheDocument();
     // Final totals are visible, resolved by name.
-    expect(within(result).getByText('Ana: 3 victory tokens')).toBeInTheDocument();
-    expect(within(result).getByText('Bruno: 1 victory token')).toBeInTheDocument();
+    expect(within(result).getByText('Ana: 3 fichas de victoria')).toBeInTheDocument();
+    expect(within(result).getByText('Bruno: 1 ficha de victoria')).toBeInTheDocument();
     // WU10 owns the whole end surface: no round-result slip coexists with it.
-    expect(screen.queryByRole('status', { name: 'Round result' })).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
   });
 
-  it('replaces the playable table: no gameplay controls and no rematch action', () => {
+  it('replaces the playable table: no gameplay controls, only the return to the lobby', async () => {
+    const controller = controllerStub();
     const { container } = render(
-      <GameTable controller={controllerStub() as RoomFlowController} state={matchEndState()} />,
+      <GameTable controller={controller as RoomFlowController} state={matchEndState()} />,
     );
-    // The dedicated surface is the whole table; the server has no rematch
-    // contract, so no action can be offered — the honest note stays copy only.
     expect(container.querySelector('.game-table')).toBeNull();
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The single supported next action: bring the whole room back to its lobby.
+    const buttons = container.querySelectorAll('button');
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Volver al lobby' }));
+    expect(controller.returnToLobby).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows each viewer their own victory or defeat preset', () => {
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={matchEndState()}
+        assetConfig={TABLETOP_ASSET_CONFIG}
+      />,
+    );
+    const outcome = () =>
+      document.querySelector('.game-result-preset')?.getAttribute('data-outcome');
+    const viewerWon = matchEndState().game.publicView?.match.winners.includes(SELF_ID) ?? false;
+    expect(outcome()).toBe(viewerWon ? 'victory' : 'defeat');
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={{ ...matchEndState(), self: { playerId: OTHER_ID, seatNumber: 2 } }}
+        assetConfig={TABLETOP_ASSET_CONFIG}
+      />,
+    );
+    expect(outcome()).toBe(viewerWon ? 'defeat' : 'victory');
   });
 
   it('uses the supplemental broadcast winners only when the projection names none', () => {
@@ -398,7 +426,7 @@ describe('game table match result (WU10)', () => {
         })}
       />,
     );
-    expect(screen.getByText('Bruno wins the match.')).toBeInTheDocument();
+    expect(screen.getByText('Bruno gana la partida.')).toBeInTheDocument();
   });
 
   it('never renders a raw winner id or an unresolvable winner', () => {
@@ -410,7 +438,7 @@ describe('game table match result (WU10)', () => {
         })}
       />,
     );
-    expect(screen.getByText('Bruno wins the match.')).toBeInTheDocument();
+    expect(screen.getByText('Bruno gana la partida.')).toBeInTheDocument();
     expect(screen.queryByText(/p-ghost/)).toBeNull();
   });
 
@@ -423,7 +451,9 @@ describe('game table match result (WU10)', () => {
         })}
       />,
     );
-    expect(screen.getByText('Ana and Bruno share the match.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Ana y Bruno comparten la victoria de la partida.'),
+    ).toBeInTheDocument();
   });
 
   it('stays honest when no winner can be resolved', () => {
@@ -435,11 +465,11 @@ describe('game table match result (WU10)', () => {
         })}
       />,
     );
-    const result = screen.getByRole('status', { name: 'Match result' });
-    expect(within(result).getByText(/no winner was announced/i)).toBeInTheDocument();
-    expect(within(result).queryByText(/wins the match/i)).toBeNull();
+    const result = screen.getByRole('status', { name: 'Resultado de la partida' });
+    expect(within(result).getByText(/no se anunció un ganador/i)).toBeInTheDocument();
+    expect(within(result).queryByText(/gana la partida/i)).toBeNull();
     // The honest fallback still shows the authoritative final totals.
-    expect(within(result).getByText('Ana: 3 victory tokens')).toBeInTheDocument();
+    expect(within(result).getByText('Ana: 3 fichas de victoria')).toBeInTheDocument();
   });
 
   it('shows the waiting state while the match is over but projections are missing', () => {
@@ -453,12 +483,103 @@ describe('game table match result (WU10)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('status')).toHaveTextContent(/table is being prepared/i);
-    expect(screen.queryByRole('status', { name: 'Match result' })).toBeNull();
+    expect(screen.getByRole('status')).toHaveTextContent(/preparando la mesa/i);
+    expect(screen.queryByRole('status', { name: 'Resultado de la partida' })).toBeNull();
   });
 });
 
 describe('game table draw control (WU6)', () => {
+  it('auto-draws once per published draw opportunity and hides the manual button', () => {
+    const controller = controllerStub();
+    const drawState = flowState({
+      privateView: privateViewWithHand(
+        [{ instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' }],
+        [{ type: 'DRAW_CARD', actorId: SELF_ID }],
+      ),
+    });
+    const { rerender } = render(
+      <GameTable controller={controller as RoomFlowController} state={drawState} autoDraw />,
+    );
+    expect(controller.drawCard).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Robar una carta' })).toBeNull();
+    rerender(
+      <GameTable controller={controller as RoomFlowController} state={{ ...drawState }} autoDraw />,
+    );
+    expect(controller.drawCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the automatic draw while a round result is on screen, then draws after Continue', async () => {
+    const controller = controllerStub();
+    render(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={flowState({
+          privateView: privateViewWithHand(
+            [{ instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' }],
+            [{ type: 'DRAW_CARD', actorId: SELF_ID }],
+          ),
+          roundResult: {
+            roundNumber: 1,
+            winnerIds: [OTHER_ID],
+            awards: [{ playerId: OTHER_ID, amount: 1 }],
+            reason: 'last-survivor',
+            revealedHands: [],
+          },
+        })}
+        autoDraw
+      />,
+    );
+    expect(controller.drawCard).not.toHaveBeenCalled();
+    // A last-survivor round reveals no hand at any seat (rules: no reveal).
+    expect(document.querySelector('.game-seat-reveal')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Continuar' })).toHaveFocus();
+    await userEvent.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(controller.drawCard).toHaveBeenCalledTimes(1);
+  });
+
+  it('flips publicly revealed exhaustion hands face up at their seats', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({
+          roundResult: {
+            roundNumber: 1,
+            winnerIds: [SELF_ID],
+            awards: [],
+            reason: 'exhaustion',
+            revealedHands: [
+              { playerId: OTHER_ID, card: { value: 5, type: 'SERPIENTE_ENCANTADORA' } },
+            ],
+          },
+        })}
+      />,
+    );
+    const bruno = screen
+      .getByRole('group', { name: 'Estado de Bruno' })
+      .closest('li') as HTMLElement;
+    expect(bruno).toHaveAttribute('data-revealed', 'true');
+    expect(
+      within(bruno).getByLabelText('Carta revelada de Bruno: Serpiente Encantadora'),
+    ).toBeInTheDocument();
+  });
+
+  it('never auto-draws without a published DRAW_CARD action', () => {
+    const controller = controllerStub();
+    render(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={flowState({
+          privateView: privateViewWithHand(
+            [{ instanceId: 'own-instance-1', value: 7, type: 'MALABARISTA_DE_OCHO_PATAS' }],
+            [],
+          ),
+        })}
+        autoDraw
+      />,
+    );
+    expect(controller.drawCard).not.toHaveBeenCalled();
+  });
+
   it('renders Draw exactly when the viewer’s own DRAW_CARD action is legal', () => {
     render(
       <GameTable
@@ -471,7 +592,7 @@ describe('game table draw control (WU6)', () => {
         })}
       />,
     );
-    const draw = screen.getByRole('button', { name: 'Draw a card' });
+    const draw = screen.getByRole('button', { name: 'Robar una carta' });
     expect(draw).toBeEnabled();
   });
 
@@ -488,7 +609,7 @@ describe('game table draw control (WU6)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Draw a card' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Robar una carta' }));
     expect(controller.drawCard).toHaveBeenCalledTimes(1);
   });
 
@@ -541,7 +662,7 @@ describe('game table draw control (WU6)', () => {
         })}
       />,
     );
-    const draw = screen.getByRole('button', { name: 'Drawing…' });
+    const draw = screen.getByRole('button', { name: 'Robando…' });
     expect(draw).toBeDisabled();
   });
 });
@@ -563,8 +684,8 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Play Malabarista de Ocho Patas' })).toBeEnabled();
-    expect(screen.queryByRole('button', { name: /Play Pecera/i })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Jugar Malabarista de Ocho Patas' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: /Jugar Pecera/i })).toBeNull();
   });
 
   it('sends the exact cardInstanceId through the controller on play', async () => {
@@ -579,7 +700,7 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     expect(controller.playCard).toHaveBeenCalledWith('own-instance-2');
     expect(controller.drawCard).not.toHaveBeenCalled();
   });
@@ -601,10 +722,10 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     // Arming alone sends nothing; the command fires only on a target choice.
     expect(controller.playCard).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toBeInTheDocument();
   });
 
   it('prefers the executable control when a card has both targetless and targeted actions', () => {
@@ -624,7 +745,7 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' })).toBeEnabled();
   });
 
   it('disables and renames play controls while a play is in flight', () => {
@@ -639,7 +760,7 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    const playing = screen.getByRole('button', { name: 'Playing…' });
+    const playing = screen.getByRole('button', { name: 'Jugando…' });
     expect(playing).toBeDisabled();
   });
 
@@ -668,7 +789,7 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    expect(screen.queryByRole('button', { name: /Play /i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Jugar /i })).toBeNull();
   });
 });
 
@@ -682,16 +803,16 @@ describe('game table error state (WU6)', () => {
           error: {
             action: 'draw',
             code: 'ENGINE_REJECTED',
-            message: 'The game rules rejected that move.',
-            sentence: 'The game rules rejected that move.',
+            message: 'Las reglas del juego rechazaron ese movimiento.',
+            sentence: 'Las reglas del juego rechazaron ese movimiento.',
             recovery: 'retry',
           },
         })}
       />,
     );
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent(/The game rules rejected that move/i);
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(alert).toHaveTextContent(/Las reglas del juego rechazaron ese movimiento/i);
+    expect(screen.getByRole('button', { name: 'Intentar de nuevo' })).toBeInTheDocument();
   });
 
   it('shows the rejected command’s sentence without a retry path when none exists', () => {
@@ -702,15 +823,17 @@ describe('game table error state (WU6)', () => {
           error: {
             action: 'play',
             code: 'ENGINE_REJECTED',
-            message: 'The game rules rejected that move.',
-            sentence: 'The game rules rejected that move.',
+            message: 'Las reglas del juego rechazaron ese movimiento.',
+            sentence: 'Las reglas del juego rechazaron ese movimiento.',
             recovery: 'none',
           },
         })}
       />,
     );
-    expect(screen.getByRole('alert')).toHaveTextContent(/The game rules rejected that move/i);
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /Las reglas del juego rechazaron ese movimiento/i,
+    );
+    expect(screen.queryByRole('button', { name: 'Intentar de nuevo' })).toBeNull();
   });
 });
 
@@ -786,29 +909,32 @@ describe('game table target selection (WU7)', () => {
     });
   }
 
-  it('arms a target-bearing card with inline, name-labeled target choices', async () => {
+  it('arms a target-bearing card with a target picker of name-labeled choices', async () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toBeEnabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    // Choices render inside the opponent's own public zone, by display name.
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
-    expect(brunoZone).not.toBeNull();
-    const brunoChoice = within(brunoZone as HTMLElement).getByRole('button', {
-      name: 'Play Pecera de Cristal on Bruno',
+    expect(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    // Choices render in a target picker dialog, by display name, while the
+    // legal seat stays highlighted on the table.
+    const picker = screen.getByRole('dialog', {
+      name: 'Elegí un objetivo para Pecera de Cristal.',
+    });
+    const brunoChoice = within(picker).getByRole('button', {
+      name: 'Jugar Pecera de Cristal contra Bruno',
     });
     expect(brunoChoice).toBeEnabled();
+    const brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
+    expect(brunoZone).toHaveAttribute('data-legal-target', 'true');
   });
 
   it('sends exactly {type, actorId, cardInstanceId, targetId} when a target is clicked', async () => {
     const controller = controllerStub();
     render(<GameTable controller={controller as RoomFlowController} state={targetedState()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     await userEvent.click(
-      within(brunoZone as HTMLElement).getByRole('button', {
-        name: 'Play Pecera de Cristal on Bruno',
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Jugar Pecera de Cristal contra Bruno',
       }),
     );
     expect(controller.playCard).toHaveBeenCalledTimes(1);
@@ -843,25 +969,27 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     expect(
-      screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' }),
+      screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' }),
     ).toBeInTheDocument();
 
     // Arming the other card replaces the armed selection: one at a time.
-    await userEvent.click(screen.getByRole('button', { name: 'Play Ratón Trampero' }));
-    expect(screen.queryByRole('button', { name: 'Play Pecera de Cristal on Bruno' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Play Ratón Trampero on Bruno' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Ratón Trampero' }));
+    expect(
+      screen.queryByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' }),
+    ).toBeNull();
+    expect(screen.getByRole('button', { name: 'Jugar Ratón Trampero contra Bruno' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' })).toBeEnabled();
   });
 
   it('disarms when Cancel is clicked and sends nothing', async () => {
     const controller = controllerStub();
     render(<GameTable controller={controller as RoomFlowController} state={targetedState()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    const cancel = screen.getByRole('button', { name: 'Cancel target' });
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    const cancel = screen.getByRole('button', { name: 'Cancelar objetivo' });
     await userEvent.click(cancel);
-    expect(screen.queryByRole('button', { name: 'Cancel target' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancelar objetivo' })).toBeNull();
     expect(controller.playCard).not.toHaveBeenCalled();
   });
 
@@ -887,7 +1015,7 @@ describe('game table target selection (WU7)', () => {
     // no arm control at all, no target choices, and no raw id. The table itself
     // still renders normally (positive anchor), so these absences are meaningful.
     expect(screen.getByText('Pecera de Cristal')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Play Pecera de Cristal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Jugar Pecera de Cristal' })).toBeNull();
     expect(screen.queryByRole('button', { name: /on /i })).toBeNull();
     expect(screen.queryByText(/p-ghost/)).toBeNull();
   });
@@ -896,10 +1024,12 @@ describe('game table target selection (WU7)', () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     // A resolvable group always leaves the armed state escapable.
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' }),
+    ).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toBeEnabled();
   });
 
   it('answers an in-flight play textually and disarms the selection', async () => {
@@ -909,44 +1039,45 @@ describe('game table target selection (WU7)', () => {
     );
     // Sending a target disarms the selection; the arm control then answers the
     // in-flight play textually.
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' }),
+    );
     rerender(
       <GameTable
         controller={controller as RoomFlowController}
         state={targetedState({ busy: 'play' })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Playing…' })).toBeDisabled();
-    expect(screen.queryByRole('button', { name: 'Cancel target' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Jugando…' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Cancelar objetivo' })).toBeNull();
   });
 
   it('disables armed target controls while any play is busy', async () => {
     const { rerender } = render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     rerender(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={targetedState({ busy: 'draw' })}
       />,
     );
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
     expect(
-      within(brunoZone as HTMLElement).getByRole('button', {
-        name: 'Play Pecera de Cristal on Bruno',
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'Jugar Pecera de Cristal contra Bruno',
       }),
     ).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toBeDisabled();
   });
 
   it('self-heals a stale armed selection when the next projection drops the card', async () => {
     const { rerender } = render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toBeInTheDocument();
 
     // New projection: the targeted action now belongs to someone else; the
     // armed selection must vanish without any local click.
@@ -965,16 +1096,16 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'Cancel target' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Play Pecera de Cristal on/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancelar objetivo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Jugar Pecera de Cristal on/ })).toBeNull();
   });
 
   it('self-heals an armed selection whose options resolve to an empty list', async () => {
     const { rerender } = render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toBeInTheDocument();
 
     // New projection: the action still names the card, but its only target id
     // now lacks a public counterpart — the empty group must disarm the
@@ -995,8 +1126,8 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    expect(screen.queryByRole('button', { name: 'Cancel target' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Play Pecera de Cristal' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancelar objetivo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Jugar Pecera de Cristal' })).toBeNull();
     expect(screen.queryByRole('button', { name: /on /i })).toBeNull();
   });
 
@@ -1017,11 +1148,11 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    const play = screen.getByRole('button', { name: 'Play Pecera de Cristal' });
+    const play = screen.getByRole('button', { name: 'Jugar Pecera de Cristal' });
     expect(play).toBeEnabled();
     // No target choices are armed or offered: the targetless play wins.
-    expect(screen.queryByRole('button', { name: 'Cancel target' })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Play Pecera de Cristal on/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancelar objetivo' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Jugar Pecera de Cristal on/ })).toBeNull();
   });
 
   it('renders exactly one choice per published option across a 3-player table', async () => {
@@ -1046,9 +1177,13 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal on Caro' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    expect(
+      screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' }),
+    ).toBeEnabled();
+    expect(
+      screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Caro' }),
+    ).toBeEnabled();
   });
 
   it('leaks no private hand data into the public player zones, even while armed', async () => {
@@ -1057,12 +1192,17 @@ describe('game table target selection (WU7)', () => {
     );
     // Arm for real so the target choice actually renders: privacy must hold
     // during the armed flow, not only in the idle layout.
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    const publicZones = screen.getByRole('region', { name: 'Players at the table' });
-    // The choice itself is public and name-labeled inside Bruno's zone.
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    const publicZones = screen.getByRole('region', { name: 'Jugadores en la mesa' });
+    // The choice itself is public and name-labeled in the picker.
     expect(
-      within(publicZones).getAllByRole('button', { name: 'Play Pecera de Cristal on Bruno' }),
+      within(screen.getByRole('dialog')).getAllByRole('button', {
+        name: 'Jugar Pecera de Cristal contra Bruno',
+      }),
     ).toHaveLength(1);
+    expect(
+      within(screen.getByRole('dialog')).queryAllByText(/own-instance|Malabarista/),
+    ).toHaveLength(0);
     // No raw instance ids, raw target ids, or private hand identities ever
     // cross into the public player zones.
     expect(within(publicZones).queryAllByText(/own-instance/)).toHaveLength(0);
@@ -1071,30 +1211,42 @@ describe('game table target selection (WU7)', () => {
     expect(within(publicZones).queryAllByText('7')).toHaveLength(0);
   });
 
+  it('cancels the target picker with Escape without playing anything', async () => {
+    const controller = controllerStub();
+    render(<GameTable controller={controller as RoomFlowController} state={targetedState()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(controller.playCard).not.toHaveBeenCalled();
+  });
+
   it('moves keyboard focus to the cancel control when arming target selection', async () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     // The arm button unmounts on arming; focus must land on a live control.
-    expect(screen.getByRole('button', { name: 'Cancel target' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Cancelar objetivo' })).toHaveFocus();
   });
 
   it('returns keyboard focus to the arm control when target selection is canceled', async () => {
     render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Cancel target' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cancelar objetivo' }));
     // The armed controls unmount on cancel; focus returns to the arm button.
-    expect(screen.getByRole('button', { name: 'Play Pecera de Cristal' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' })).toHaveFocus();
   });
   it('keeps keyboard focus on a live target control while a zone cue changes', async () => {
     const { rerender } = render(
       <GameTable controller={controllerStub() as RoomFlowController} state={targetedState()} />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
-    const targetButton = screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' });
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
+    const targetButton = screen.getByRole('button', {
+      name: 'Jugar Pecera de Cristal contra Bruno',
+    });
     targetButton.focus();
     expect(document.activeElement).toBe(targetButton);
 
@@ -1108,7 +1260,7 @@ describe('game table target selection (WU7)', () => {
         })}
       />,
     );
-    const stillLive = screen.getByRole('button', { name: 'Play Pecera de Cristal on Bruno' });
+    const stillLive = screen.getByRole('button', { name: 'Jugar Pecera de Cristal contra Bruno' });
     expect(stillLive).toBe(targetButton);
     expect(document.activeElement).toBe(targetButton);
   });
@@ -1163,12 +1315,12 @@ describe('game table private decision modal (WU8)', () => {
     const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     // The private hidden card is visible to the addressed actor only.
-    expect(screen.getByLabelText(/Saqueadog de Tumbas, value 6/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Saqueadog de Tumbas, valor 6/i)).toBeInTheDocument();
   });
 
   it('suppresses the actor-facing third-person pending copy while the modal is open', () => {
     render(<GameTable controller={controllerStub() as RoomFlowController} state={swapState()} />);
-    expect(screen.queryByText(/Ana is making a private swap decision/i)).toBeNull();
+    expect(screen.queryByText(/Ana está tomando una decisión privada de intercambio/i)).toBeNull();
   });
 
   it('keeps the public waiting copy for a non-actor and renders no modal', () => {
@@ -1186,7 +1338,9 @@ describe('game table private decision modal (WU8)', () => {
         })}
       />,
     );
-    expect(screen.getByText(/Bruno is making a private swap decision/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Bruno está tomando una decisión privada de intercambio/i),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
@@ -1234,7 +1388,7 @@ describe('game table private decision modal (WU8)', () => {
   it('sends the exact swap choice through the controller from the modal', async () => {
     const controller = controllerStub();
     render(<GameTable controller={controller as RoomFlowController} state={swapState()} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Swap with the hidden card' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Cambiar por la carta oculta' }));
     expect(controller.chooseHiddenSwap).toHaveBeenCalledTimes(1);
     expect(controller.chooseHiddenSwap).toHaveBeenCalledWith(true);
   });
@@ -1258,7 +1412,7 @@ describe('game table private decision modal (WU8)', () => {
         })}
       />,
     );
-    const drawButton = screen.getByRole('button', { name: 'Draw a card' });
+    const drawButton = screen.getByRole('button', { name: 'Robar una carta' });
     drawButton.focus();
     expect(drawButton).toHaveFocus();
 
@@ -1279,7 +1433,7 @@ describe('game table private decision modal (WU8)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Draw a card' })).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Robar una carta' })).toHaveFocus();
   });
 
   it('surfaces a pending-decision failure as an alert inside the modal with retry', async () => {
@@ -1291,7 +1445,7 @@ describe('game table private decision modal (WU8)', () => {
           error: {
             action: 'choose-hidden-swap',
             code: 'ENGINE_REJECTED',
-            message: 'The game rules rejected that move.',
+            message: 'Las reglas del juego rechazaron ese movimiento.',
             sentence: 'The swap could not be sent.',
             recovery: 'retry',
           },
@@ -1305,7 +1459,7 @@ describe('game table private decision modal (WU8)', () => {
     expect(alerts[0]).toHaveTextContent(/The swap could not be sent/i);
     expect(screen.getAllByRole('alert')).toHaveLength(1);
     // The retry action lives inside the active modal, not the inert subtree.
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Intentar de nuevo' }));
     expect(controller.retry).toHaveBeenCalledTimes(1);
     // The decision is still pending: the modal stays open over the inert table.
     expect(dialog).toBeInTheDocument();
@@ -1319,7 +1473,7 @@ describe('game table private decision modal (WU8)', () => {
           error: {
             action: 'choose-hidden-swap',
             code: 'ENGINE_REJECTED',
-            message: 'The game rules rejected that move.',
+            message: 'Las reglas del juego rechazaron ese movimiento.',
             sentence: 'The swap could not be sent.',
             recovery: 'none',
           },
@@ -1328,7 +1482,7 @@ describe('game table private decision modal (WU8)', () => {
     );
     const dialog = screen.getByRole('dialog', { name: /Saqueadog de Tumbas/i });
     expect(within(dialog).getByRole('alert')).toHaveTextContent(/The swap could not be sent/i);
-    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Intentar de nuevo' })).toBeNull();
   });
 });
 
@@ -1381,11 +1535,11 @@ describe('game table motion cues (M8)', () => {
         state={flowState({ motionCue: DRAW_BATCH, publicView: handCountView(2, 1) })}
       />,
     );
-    const anaHand = screen.getByRole('group', { name: '2 face-down cards' });
+    const anaHand = screen.getByRole('group', { name: '2 cartas boca abajo' });
     expect(anaHand).toHaveAttribute('data-motion', 'draw-settle');
     expect(anaHand).toHaveAttribute('data-motion-sequence', '1');
     // The other seat stays motionless: no invented attribution.
-    expect(screen.getByRole('group', { name: '1 face-down card' })).not.toHaveAttribute(
+    expect(screen.getByRole('group', { name: '1 carta boca abajo' })).not.toHaveAttribute(
       'data-motion',
     );
     // A draw cue never reveals or names a card.
@@ -1410,16 +1564,17 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
     expect(pile).toHaveAttribute('data-motion', 'card-landing');
     expect(pile).toHaveAttribute('data-motion-sequence', '1');
     // The pile count is part of the marked surface; the displayed card is the
     // projection's own public card, not one invented by the cue.
-    expect(pile).toHaveTextContent('1 card in the pile');
-    expect(within(pile).getByText('4')).toBeInTheDocument();
-    expect(within(pile).getByText(/Caparazón Armazón/i)).toBeInTheDocument();
-    // The other seat's pile is untouched.
-    expect(screen.queryByRole('group', { name: 'Bruno public discards' })).toBeNull();
+    expect(pile).toHaveTextContent('1 carta en la pila');
+    // The resting pile card (not the decorative thrown overlay) is the
+    // projection's own public card.
+    const slot = pile.querySelector('.game-discard-slot') as HTMLElement;
+    expect(within(slot).getByText('4')).toBeInTheDocument();
+    expect(within(slot).getByText(/Caparazón Armazón/i)).toBeInTheDocument();
   });
 
   it('fires no landing cue when the projection does not confirm the newest discard', () => {
@@ -1455,16 +1610,15 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
     expect(pile).toHaveAttribute('data-motion', 'card-flip');
-    expect(within(pile).getByText('Forced face up')).toBeInTheDocument();
+    expect(within(pile).getByText('Forzada boca arriba')).toBeInTheDocument();
     // Private own-hand cards never receive the public flip treatment.
-    const ownHand = screen.getByRole('region', { name: 'Your hand' });
+    const ownHand = screen.getByRole('region', { name: 'Tu mano' });
     expect(ownHand.querySelectorAll('[data-motion]')).toHaveLength(0);
     expect(ownHand.querySelectorAll('.game-card-origin')).toHaveLength(0);
-    // One flip on the public discard destination, one on the center stage
-    // that mirrors the same public card where the physical table would.
-    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(2);
+    // One flip, on the shared pile that holds the forced card.
+    expect(container.querySelectorAll('[data-motion="card-flip"]')).toHaveLength(1);
   });
 
   it('applies the flip to an elimination-reveal shell with its origin label', () => {
@@ -1480,9 +1634,9 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    const pile = screen.getByRole('group', { name: 'Bruno public discards' });
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
     expect(pile).toHaveAttribute('data-motion', 'card-flip');
-    expect(within(pile).getByText('Revealed by elimination')).toBeInTheDocument();
+    expect(within(pile).getByText('Revelada por eliminación')).toBeInTheDocument();
   });
 
   it('keeps origin labels visible without any motion when no cue addresses them', () => {
@@ -1500,8 +1654,8 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    expect(screen.getByText('Forced face up')).toBeInTheDocument();
-    expect(screen.getByText('Revealed by elimination')).toBeInTheDocument();
+    expect(screen.getByText('Forzada boca arriba')).toBeInTheDocument();
+    expect(screen.getByText('Revelada por eliminación')).toBeInTheDocument();
     // Projection-only state: labels persist, motion never starts.
     expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
   });
@@ -1550,9 +1704,9 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    const anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
-    const caroZone = screen.getByRole('group', { name: 'Caro status' }).closest('li');
+    const anaZone = screen.getByRole('group', { name: 'Estado de Ana' }).closest('li');
+    const brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
+    const caroZone = screen.getByRole('group', { name: 'Estado de Caro' }).closest('li');
     expect(anaZone).toHaveAttribute('data-motion', 'hand-exchange');
     expect(brunoZone).toHaveAttribute('data-motion', 'hand-exchange');
     expect(caroZone).not.toHaveAttribute('data-motion');
@@ -1567,7 +1721,7 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    const section = screen.getByRole('region', { name: 'Players at the table' });
+    const section = screen.getByRole('region', { name: 'Jugadores en la mesa' });
     expect(section).toHaveAttribute('data-motion', 'hand-shuffle');
     expect(section).toHaveAttribute('data-motion-sequence', '1');
     // No seat and no hand zone is singled out.
@@ -1588,8 +1742,8 @@ describe('game table motion cues (M8)', () => {
         state={flowState({ motionCue: saqueadogBatch })}
       />,
     );
-    let anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
-    let brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    let anaZone = screen.getByRole('group', { name: 'Estado de Ana' }).closest('li');
+    let brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
     expect(anaZone).toHaveAttribute('data-motion', 'effect-settle');
     expect(brunoZone).not.toHaveAttribute('data-motion');
 
@@ -1599,8 +1753,8 @@ describe('game table motion cues (M8)', () => {
         state={flowState({ motionCue: ratonBatch })}
       />,
     );
-    anaZone = screen.getByRole('group', { name: 'Ana status' }).closest('li');
-    brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    anaZone = screen.getByRole('group', { name: 'Estado de Ana' }).closest('li');
+    brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
     expect(anaZone).not.toHaveAttribute('data-motion');
     expect(brunoZone).toHaveAttribute('data-motion', 'effect-settle');
   });
@@ -1669,7 +1823,7 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('button', { name: 'Draw a card' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Robar una carta' })).toBeEnabled();
 
     rerender(
       <GameTable
@@ -1681,11 +1835,11 @@ describe('game table motion cues (M8)', () => {
         })}
       />,
     );
-    expect(screen.getByRole('group', { name: '2 face-down cards' })).toHaveAttribute(
+    expect(screen.getByRole('group', { name: '2 cartas boca abajo' })).toHaveAttribute(
       'data-motion',
       'draw-settle',
     );
-    expect(screen.getByRole('button', { name: 'Draw a card' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Robar una carta' })).toBeEnabled();
   });
 
   it('retriggers one-shot motion by batch identity and holds still otherwise', () => {
@@ -1797,89 +1951,30 @@ describe('game table center-action stage (M8 finish)', () => {
     { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 10, type: 'REY_GATO' } },
   ]);
 
-  it('renders a non-interactive center stage with the confirmed public card and the same cue', () => {
+  it('marks the shared pile with the confirmed cue and renders no overlay copy of the card', () => {
     const { container } = render(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
       />,
     );
-    const stage = container.querySelector('.game-center-stage');
-    expect(stage).not.toBeNull();
-    // The exact sequence cue of the authoritative batch.
-    expect(stage).toHaveAttribute('data-motion', 'card-landing');
-    expect(stage).toHaveAttribute('data-motion-sequence', '1');
-    // Non-interactive: no button, no focusable anything, hidden from a11y tree.
-    expect(stage?.querySelectorAll('button')).toHaveLength(0);
-    expect(stage).toHaveAttribute('aria-hidden', 'true');
-    // The public card itself, exactly as the cue and projection carry it.
-    const card = stage?.querySelector('.game-card-placeholder');
-    expect(card?.getAttribute('aria-label')).toBe('Rey Gato, value 10');
-    expect(within(stage as HTMLElement).getByText('10')).toBeInTheDocument();
-    expect(within(stage as HTMLElement).getByText(/Rey Gato/i)).toBeInTheDocument();
-    // No instance identity, no seat attribution anywhere on the stage.
-    expect(stage?.textContent).not.toContain('instance');
-    expect(stage?.textContent).not.toContain(OTHER_ID);
-    expect(stage?.textContent).not.toContain('Ana');
-  });
-
-  it('renders no stage before the projection confirms the destination', () => {
-    const { container } = render(
-      <GameTable
-        controller={controllerStub() as RoomFlowController}
-        state={flowState({
-          publicView: viewWithDiscards([]),
-          motionCue: motionCueFrom([
-            { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 10, type: 'REY_GATO' } },
-          ]),
-        })}
-      />,
-    );
-    expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
+    expect(pile).toHaveAttribute('data-motion', 'card-landing');
+    expect(pile).toHaveAttribute('data-motion-sequence', '1');
+    // The thrown card is the real top pile card, animated in place: no second
+    // decorative card is mounted anywhere.
     expect(container.querySelector('.game-center-stage')).toBeNull();
+    expect(pile.querySelectorAll('.game-discard-slot')).toHaveLength(1);
   });
 
-  it('never stages a draw, effect, exchange, or shuffle cue', () => {
-    // A confirmed draw: the addressed player's public handCount changed.
-    const drawView = viewWithDiscards([]).players.map((player) =>
-      player.id === SELF_ID ? { ...player, handCount: 2 } : player,
-    );
-    const drawState = flowState({
-      publicView: { ...viewWithDiscards([]), players: drawView },
-      motionCue: motionCueFrom([{ type: 'CARD_DRAWN', playerId: SELF_ID }]),
-    });
-    const { container } = render(
-      <GameTable controller={controllerStub() as RoomFlowController} state={drawState} />,
-    );
-    expect(container.querySelector('.game-center-stage')).toBeNull();
-
-    const effectState = flowState({
-      motionCue: motionCueFrom([{ type: 'SAQUEADOG_RESOLVED', playerId: SELF_ID }]),
-    });
-    const { container: effectContainer } = render(
-      <GameTable controller={controllerStub() as RoomFlowController} state={effectState} />,
-    );
-    expect(effectContainer.querySelector('.game-center-stage')).toBeNull();
-
-    const shuffleState = flowState({
-      motionCue: motionCueFrom([{ type: 'HANDS_REDEALT', playerIds: [SELF_ID, OTHER_ID] }]),
-    });
-    const { container: shuffleContainer } = render(
-      <GameTable controller={controllerStub() as RoomFlowController} state={shuffleState} />,
-    );
-    expect(shuffleContainer.querySelector('.game-center-stage')).toBeNull();
-  });
-
-  it('never replays the stage across a projection-only reconnect-style reset', () => {
+  it('never replays a pile cue across a projection-only reconnect-style reset', () => {
     const { container, rerender } = render(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
       />,
     );
-    expect(container.querySelector('.game-center-stage')).not.toBeNull();
-
-    // The game cleared and re-projected: cues reset with it, stage included.
+    expect(container.querySelector('[data-motion="card-landing"]')).not.toBeNull();
     rerender(
       <GameTable
         controller={controllerStub() as RoomFlowController}
@@ -1887,79 +1982,23 @@ describe('game table center-action stage (M8 finish)', () => {
       />,
     );
     expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
-    expect(container.querySelector('.game-center-stage')).toBeNull();
   });
 
-  it('reaches the rendered stage through a stylesheet rule that actually matches it', () => {
+  it('keeps draw pile left, shared discard pile center, and hidden card right', () => {
     const { container } = render(
       <GameTable
         controller={controllerStub() as RoomFlowController}
         state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
       />,
     );
-    const stage = container.querySelector('.game-center-stage');
-    expect(stage).not.toBeNull();
-    // A landing rule must reach the stage node itself (attribute presence
-    // alone never proves the animation starts).
-    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
-    const rules = [...source.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)].map((match) => ({
-      selector: match[1].trim(),
-      body: match[2],
-    }));
-    // The stage animates as its own overlay surface with its stage-specific
-    // landing keyframes (which end back at opacity 0), so the rule must reach
-    // the stage node itself.
-    const stageRules = rules.filter(
-      (rule) =>
-        rule.selector.includes('game-center-stage') &&
-        rule.body.includes('landing') &&
-        rule.body.includes('animation'),
-    );
-    expect(stageRules.length).toBeGreaterThan(0);
-    for (const rule of stageRules) {
-      expect([...container.querySelectorAll(rule.selector)]).toContain(stage);
-    }
-  });
-
-  it('overlays the shared center out-of-flow with base opacity 0', () => {
-    // Static layout contract: the center establishes the positioning
-    // context, and the stage is an absolute, centered, pointer-events-none
-    // overlay spanning it — never a grid participant that shifts the piles.
-    const source = motionCss.replace(/\/\*[\s\S]*?\*\//g, '');
-    const rules = [...source.matchAll(/([^{}]+)[{]([^{}]*)[}]/g)].map((match) => ({
-      selector: match[1].trim(),
-      body: match[2],
-    }));
-    const centerRules = rules.filter((rule) => rule.selector === '.game-center');
-    expect(centerRules.some((rule) => rule.body.includes('position: relative'))).toBe(true);
-    const stageRule = rules.find((rule) => rule.selector === '.game-center-stage');
-    expect(stageRule?.body).toMatch(/position:\s*absolute/);
-    expect(stageRule?.body).toMatch(/inset:\s*0/);
-    expect(stageRule?.body).toMatch(/pointer-events:\s*none/);
-    expect(stageRule?.body).toMatch(/opacity:\s*0/);
-  });
-
-  it('keeps the center pile structure stable while the stage overlay is mounted', () => {
-    const { container } = render(
-      <GameTable
-        controller={controllerStub() as RoomFlowController}
-        state={flowState({ publicView: LANDING_VIEW, motionCue: LANDING_BATCH })}
-      />,
-    );
-    // Exactly the two piles remain the center's in-flow children, in the
-    // same order and with their own content, while the overlay is mounted.
     const center = container.querySelector('.game-center');
     const piles = center?.querySelectorAll(':scope > .game-pile');
-    expect(piles).toHaveLength(2);
-    expect(piles?.[0]).toHaveTextContent('Draw pile');
-    expect(piles?.[1]).toHaveTextContent('Hidden card');
-    expect(piles?.[1]?.querySelector('.game-card-placeholder-back')).not.toBeNull();
-    // The overlay itself carries no pile structure of its own.
-    const stage = container.querySelector('.game-center-stage');
-    expect(stage?.querySelectorAll('.game-pile')).toHaveLength(0);
-    // The piles' honest counts survive the overlay unchanged.
-    expect(screen.getByText(/^18 cards$/i)).toBeInTheDocument();
-    expect(screen.getByText(/^1 face down$/i)).toBeInTheDocument();
+    expect(piles).toHaveLength(3);
+    expect(piles?.[0]).toHaveTextContent('Mazo');
+    expect(piles?.[1]).toHaveAttribute('aria-label', 'Pila de descartes');
+    expect(piles?.[2]).toHaveTextContent('Carta oculta');
+    expect(screen.getByText(/^18 cartas$/i)).toBeInTheDocument();
+    expect(screen.getByText(/^1 boca abajo$/i)).toBeInTheDocument();
   });
 });
 
@@ -1969,9 +2008,9 @@ describe('game table persistent player states (M8)', () => {
       <GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />,
     );
     // The default projection seats Bruno as protected.
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    const brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
     expect(brunoZone).toHaveAttribute('data-protected', 'true');
-    const badge = within(brunoZone as HTMLElement).getByText('protected');
+    const badge = within(brunoZone as HTMLElement).getByText('protegido');
     expect(badge).toHaveClass('game-status-badge');
     expect(badge.querySelector('.game-status-pin')).not.toBeNull();
     // Projection-only persistent state: no motion attribute anywhere.
@@ -1989,10 +2028,10 @@ describe('game table persistent player states (M8)', () => {
         })}
       />,
     );
-    const pile = screen.getByRole('group', { name: 'Ana public discards' });
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
     // The textual origin stamp persists, and the shell carries a non-color
     // structural marker.
-    expect(within(pile).getByText('Forced face up')).toBeInTheDocument();
+    expect(within(pile).getByText('Forzada boca arriba')).toBeInTheDocument();
     const slot = pile.querySelector('.game-discard-slot[data-forced="true"]');
     expect(slot).not.toBeNull();
     expect(slot?.querySelector('.game-card-placeholder')).not.toBeNull();
@@ -2037,23 +2076,23 @@ describe('game table persistent player states (M8)', () => {
         state={flowState({ publicView: eliminated })}
       />,
     );
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    const brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
     expect(brunoZone).toHaveAttribute('data-eliminated', 'true');
-    expect(within(brunoZone as HTMLElement).getByText('eliminated')).toBeInTheDocument();
+    expect(within(brunoZone as HTMLElement).getByText('eliminado')).toBeInTheDocument();
     // Public discard history is retained, with explicit origin labels.
-    const pile = screen.getByRole('group', { name: 'Bruno public discards' });
+    const pile = screen.getByRole('group', { name: 'Pila de descartes' });
     expect(within(pile).getByText(/Rey Gato/i)).toBeInTheDocument();
-    expect(within(pile).getByText('Revealed by elimination')).toBeInTheDocument();
+    expect(within(pile).getByText('Revelada por eliminación')).toBeInTheDocument();
     expect(container.querySelectorAll('[data-motion]')).toHaveLength(0);
   });
 
   it('renders victory tokens as a semantic text-readable rack from the committed projection', () => {
     render(<GameTable controller={controllerStub() as RoomFlowController} state={flowState()} />);
-    const rack = screen.getByRole('group', { name: 'Bruno: 0 victory tokens' });
+    const rack = screen.getByRole('group', { name: 'Bruno: 0 fichas de victoria' });
     expect(rack).toHaveClass('game-token-rack');
-    expect(within(rack).getByText('0 victory tokens')).toBeInTheDocument();
-    const anaRack = screen.getByRole('group', { name: 'Ana: 1 victory token' });
-    expect(within(anaRack).getByText('1 victory token')).toBeInTheDocument();
+    expect(within(rack).getByText('0 fichas de victoria')).toBeInTheDocument();
+    const anaRack = screen.getByRole('group', { name: 'Ana: 1 ficha de victoria' });
+    expect(within(anaRack).getByText('1 ficha de victoria')).toBeInTheDocument();
     expect(within(anaRack).getByRole('listitem', { hidden: true })).toBeInTheDocument();
   });
 });
@@ -2127,7 +2166,7 @@ describe('game table protection & token status cues (M8)', () => {
         state={flowState({ motionCue: batch, publicView: confirmedView })}
       />,
     );
-    const brunoStatus = screen.getByRole('group', { name: 'Bruno status' });
+    const brunoStatus = screen.getByRole('group', { name: 'Estado de Bruno' });
     // The cue mounts the keyed non-interactive pulse layer inside the
     // always-rendered status surface; the surface itself stays unmarked.
     const settlePulse = brunoStatus.querySelector('.game-status-pulse[data-motion]');
@@ -2135,11 +2174,11 @@ describe('game table protection & token status cues (M8)', () => {
     expect(settlePulse).toHaveAttribute('data-motion-sequence', '1');
     expect(brunoStatus).not.toHaveAttribute('data-motion');
     expect(
-      screen.getByRole('group', { name: 'Ana status' }).querySelector('[data-motion]'),
+      screen.getByRole('group', { name: 'Estado de Ana' }).querySelector('[data-motion]'),
     ).toBeNull();
     // The persistent badge is present from the projection; the cue never
     // reveals hidden-card information.
-    expect(within(brunoStatus as HTMLElement).getByText('protected')).toBeInTheDocument();
+    expect(within(brunoStatus as HTMLElement).getByText('protegido')).toBeInTheDocument();
     expect(container.textContent).not.toContain('instance');
   });
 
@@ -2175,7 +2214,7 @@ describe('game table protection & token status cues (M8)', () => {
         state={flowState({ motionCue: batch, publicView: clearedView })}
       />,
     );
-    const brunoStatus = screen.getByRole('group', { name: 'Bruno status' });
+    const brunoStatus = screen.getByRole('group', { name: 'Estado de Bruno' });
     // The expiry cue mounts the keyed pulse layer on the stable, always-rendered
     // status surface — perceivable even though the badge is now gone.
     const expirePulse = brunoStatus.querySelector('.game-status-pulse[data-motion]');
@@ -2183,7 +2222,7 @@ describe('game table protection & token status cues (M8)', () => {
     expect(expirePulse).toHaveAttribute('data-motion-sequence', '1');
     expect(brunoStatus).not.toHaveAttribute('data-motion');
     // The persistent marker is gone with the projection: no stale badge.
-    expect(screen.queryByText(/protected/i)).toBeNull();
+    expect(screen.queryByText(/protegido/i)).toBeNull();
     expect(brunoStatus.closest('li')).toHaveAttribute('data-protected', 'false');
   });
 
@@ -2221,7 +2260,7 @@ describe('game table protection & token status cues (M8)', () => {
         state={flowState({ motionCue: batch, publicView: confirmingView })}
       />,
     );
-    const brunoRack = screen.getByRole('group', { name: 'Bruno: 2 victory tokens' });
+    const brunoRack = screen.getByRole('group', { name: 'Bruno: 2 fichas de victoria' });
     // The cue lives on the keyed non-interactive pulse layer inside the rack.
     const rackPulse = brunoRack.querySelector('.game-token-pulse[data-motion]');
     expect(rackPulse).toHaveAttribute('data-motion', 'token-settle');
@@ -2229,9 +2268,11 @@ describe('game table protection & token status cues (M8)', () => {
     expect(brunoRack).not.toHaveAttribute('data-motion');
     // The displayed count is the committed projection value, never an
     // optimistic increment beyond what the projection carries.
-    expect(within(brunoRack).getByText('2 victory tokens')).toBeInTheDocument();
+    expect(within(brunoRack).getByText('2 fichas de victoria')).toBeInTheDocument();
     expect(
-      screen.getByRole('group', { name: 'Ana: 1 victory token' }).querySelector('[data-motion]'),
+      screen
+        .getByRole('group', { name: 'Ana: 1 ficha de victoria' })
+        .querySelector('[data-motion]'),
     ).toBeNull();
   });
 
@@ -2257,9 +2298,9 @@ describe('game table protection & token status cues (M8)', () => {
         })}
       />,
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     const targetButton = screen.getByRole('button', {
-      name: 'Play Pecera de Cristal on Bruno',
+      name: 'Jugar Pecera de Cristal contra Bruno',
     });
     targetButton.focus();
     expect(document.activeElement).toBe(targetButton);
@@ -2275,7 +2316,7 @@ describe('game table protection & token status cues (M8)', () => {
       />,
     );
     const stillLive = screen.getByRole('button', {
-      name: 'Play Pecera de Cristal on Bruno',
+      name: 'Jugar Pecera de Cristal contra Bruno',
     });
     expect(stillLive).toBe(targetButton);
     expect(document.activeElement).toBe(targetButton);
@@ -2379,14 +2420,14 @@ describe('game table protection & token status cues (M8)', () => {
       />,
     );
     // The first activation lands on Bruno's already-protected projection.
-    const brunoZone = screen.getByRole('group', { name: 'Bruno status' }).closest('li');
+    const brunoZone = screen.getByRole('group', { name: 'Estado de Bruno' }).closest('li');
     expect(
       brunoZone?.querySelector('.game-status-pulse[data-motion="protection-settle"]'),
     ).toHaveAttribute('data-motion-sequence', '1');
     // Arm the target selection so the zone hosts a live, focused control.
-    await userEvent.click(screen.getByRole('button', { name: 'Play Pecera de Cristal' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Jugar Pecera de Cristal' }));
     const targetButton = screen.getByRole('button', {
-      name: 'Play Pecera de Cristal on Bruno',
+      name: 'Jugar Pecera de Cristal contra Bruno',
     });
     targetButton.focus();
     expect(document.activeElement).toBe(targetButton);
@@ -2412,7 +2453,7 @@ describe('game table protection & token status cues (M8)', () => {
         ?.getAttribute('data-motion-sequence'),
     ).toBe('2');
     const stillLive = screen.getByRole('button', {
-      name: 'Play Pecera de Cristal on Bruno',
+      name: 'Jugar Pecera de Cristal contra Bruno',
     });
     expect(stillLive).toBe(targetButton);
     expect(document.activeElement).toBe(targetButton);

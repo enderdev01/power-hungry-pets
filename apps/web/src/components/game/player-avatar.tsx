@@ -58,7 +58,7 @@ export function PlayerAvatar({ name, label }: PlayerAvatarProps) {
     <span
       className="game-seat-avatar"
       role="img"
-      aria-label={label ?? `${name}'s seat`}
+      aria-label={label ?? `Asiento de ${name}`}
       data-avatar-variant={avatarVariant(name)}
     >
       {/* The visible initials repeat the accessible label decoratively. */}

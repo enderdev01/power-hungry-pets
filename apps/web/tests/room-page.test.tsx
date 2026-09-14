@@ -48,7 +48,7 @@ describe('room route identity guard', () => {
   it('reconciles a changed URL without rendering the previous live table', async () => {
     render(<RoomPage />);
     expect(screen.queryByText('game table')).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent(/switching rooms/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/cambiando de sala/i);
     await waitFor(() => expect(enterRoom).toHaveBeenCalledWith('OTHER'));
   });
 
@@ -56,7 +56,7 @@ describe('room route identity guard', () => {
     roomStatus = 'LOBBY';
     render(<RoomPage />);
     expect(screen.queryByText('lobby')).toBeNull();
-    expect(screen.getByRole('status')).toHaveTextContent(/switching rooms/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/cambiando de sala/i);
   });
 
   it('leaves initial entry to the lobby when no room is currently bound', async () => {

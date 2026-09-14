@@ -18,10 +18,11 @@
  */
 import { useEffect, useRef } from 'react';
 import { CardPlaceholder } from '@/components/game/card-placeholder';
+import { resolveCardArt, type CardAssetConfig } from '@/lib/game/asset-resolver';
 import type { PendingDecisionModel } from '@/lib/game/pending-decision';
-import { cardPresentation } from '@/lib/game/card-presentation';
+import { CARD_VALUES, cardPresentation } from '@/lib/game/card-presentation';
 import type { FlowError } from '@/lib/room-flow/reducer';
-import type { GameCardInstance } from '@power-hungry-pets/protocol';
+import type { CardType, GameCardInstance } from '@power-hungry-pets/protocol';
 
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -53,31 +54,49 @@ function stageKeyOf(decision: PendingDecisionModel): string {
 function decisionTitle(decision: PendingDecisionModel): string {
   switch (decision.kind) {
     case 'choose-target':
-      return 'Pecera de Cristal — choose a target';
+      return 'Pecera de Cristal — elegí un objetivo';
     case 'submit-guess':
-      return 'Pecera de Cristal — name your guess';
+      return 'Pecera de Cristal — elegí tu apuesta';
     case 'choose-hidden-swap':
-      return 'Saqueadog de Tumbas — the hidden card';
+      return 'Saqueadog de Tumbas — la carta oculta';
     case 'choose-deck-position':
-      return 'Ratón Trampero — choose the reinsertion slot';
+      return 'Ratón Trampero — elegí dónde reinsertar la carta';
     case 'unavailable':
-      return 'Decision unavailable';
+      return 'Decisión no disponible';
     default:
-      return 'Decision';
+      return 'Decisión';
+  }
+}
+
+/**
+ * The already-public card whose effect opened the decision. Its identity was
+ * revealed when it was played, so the emblem leaks nothing private.
+ */
+function decisionSourceCard(decision: PendingDecisionModel): CardType | null {
+  switch (decision.kind) {
+    case 'choose-target':
+    case 'submit-guess':
+      return 'PECERA_DE_CRISTAL';
+    case 'choose-hidden-swap':
+      return 'SAQUEADOG_DE_TUMBAS';
+    case 'choose-deck-position':
+      return 'RATON_TRAMPERO';
+    default:
+      return null;
   }
 }
 
 function positionLabel(index: number, positions: number[]): string {
   if (positions.length === 1) {
-    return 'Top of the draw pile';
+    return 'Parte superior del mazo';
   }
   if (index === 0) {
-    return 'Top of the draw pile';
+    return 'Parte superior del mazo';
   }
   if (index === Math.max(...positions)) {
-    return 'Bottom of the draw pile';
+    return 'Parte inferior del mazo';
   }
-  return `Slot ${index}`;
+  return `Posición ${index}`;
 }
 
 interface PrivateDecisionModalProps {
@@ -85,6 +104,8 @@ interface PrivateDecisionModalProps {
   decision: PendingDecisionModel;
   /** The viewer's own hand, shown privately beside the Saqueadog hidden card. */
   hand: GameCardInstance[] | null;
+  /** Card art mapping; the modal resolves art exactly like the table. */
+  assetConfig?: CardAssetConfig;
   /** True while a command is in flight; every choice disables textually. */
   busy: boolean;
   onChooseTarget: (targetId: string) => void;
@@ -108,6 +129,7 @@ interface PrivateDecisionModalProps {
 export function PrivateDecisionModal({
   decision,
   hand,
+  assetConfig,
   busy,
   onChooseTarget,
   onSubmitGuess,
@@ -206,6 +228,11 @@ export function PrivateDecisionModal({
   }
 
   const title = decisionTitle(decision);
+  const sourceType = decisionSourceCard(decision);
+  const sourceArt =
+    sourceType === null
+      ? null
+      : resolveCardArt(cardPresentation({ type: sourceType, value: 0 }).artKey, assetConfig);
 
   return (
     <div
@@ -220,18 +247,32 @@ export function PrivateDecisionModal({
         aria-modal="true"
         aria-labelledby="private-decision-title"
         className="game-modal"
+        data-decision={decision.kind}
         tabIndex={-1}
       >
-        <h2 id="private-decision-title" className="game-modal-title">
-          {title}
-        </h2>
+        <header className="game-modal-header">
+          {sourceArt !== null && (
+            <span className="game-modal-emblem" data-art-kind={sourceArt.kind} aria-hidden="true">
+              {sourceArt.kind === 'image' && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="game-card-image" src={sourceArt.src} alt="" draggable={false} />
+              )}
+            </span>
+          )}
+          <span className="game-modal-kicker" aria-hidden="true">
+            Decisión privada
+          </span>
+          <h2 id="private-decision-title" className="game-modal-title">
+            {title}
+          </h2>
+        </header>
 
         {error !== null && error !== undefined && (
           <div className="game-modal-error" role="alert">
             <p className="game-error-sentence">{error.sentence}</p>
             {error.recovery === 'retry' && onRetry !== undefined && (
               <button type="button" className="action-button" onClick={onRetry}>
-                Try again
+                Intentar de nuevo
               </button>
             )}
           </div>
@@ -239,14 +280,14 @@ export function PrivateDecisionModal({
 
         {decision.kind === 'unavailable' && (
           <p className="game-modal-status" role="status">
-            Waiting for the table to settle — your decision will appear here as soon as the server
-            confirms it.
+            Esperando la confirmación del servidor. Tu decisión aparecerá acá en cuanto la mesa esté
+            lista.
           </p>
         )}
 
         {decision.kind === 'choose-target' && (
           <>
-            <p className="game-modal-copy">Whose hand will you look into?</p>
+            <p className="game-modal-copy">¿Qué mano querés mirar?</p>
             <div className="game-decision-controls">
               {decision.targets.map((target) => (
                 <button
@@ -256,7 +297,7 @@ export function PrivateDecisionModal({
                   disabled={busy}
                   onClick={() => onChooseTarget(target.targetId)}
                 >
-                  {`Choose ${target.name}`}
+                  {`Elegir a ${target.name}`}
                 </button>
               ))}
             </div>
@@ -267,46 +308,63 @@ export function PrivateDecisionModal({
           <>
             <p className="game-modal-copy">
               {decision.targetName === null
-                ? 'Choose the value you will guess.'
-                : `You are guessing ${decision.targetName}'s hand.`}
+                ? 'Elegí el valor que querés apostar.'
+                : `Estás apostando el valor de la mano de ${decision.targetName}.`}
             </p>
-            <div className="game-decision-controls">
-              {decision.values.map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  className="action-button game-decision-button game-decision-value"
-                  disabled={busy}
-                  onClick={() => onSubmitGuess(value)}
-                >
-                  {`Guess ${value}`}
-                </button>
-              ))}
+            <div className="game-decision-controls game-decision-values">
+              {/* Only server-published values are buttons. Other catalog values
+                  render as inert, labelled tiles so the value grid keeps its
+                  shape; they never become choices. */}
+              {CARD_VALUES.map((value) =>
+                decision.values.includes(value) ? (
+                  <button
+                    key={value}
+                    type="button"
+                    className="action-button game-decision-button game-decision-value"
+                    disabled={busy}
+                    onClick={() => onSubmitGuess(value)}
+                  >
+                    <span className="game-decision-value-number" aria-hidden="true">
+                      {value}
+                    </span>
+                    <span className="game-decision-value-verb">{`Apostar ${value}`}</span>
+                  </button>
+                ) : (
+                  <span key={value} className="game-decision-value-unavailable">
+                    <span className="game-decision-value-number" aria-hidden="true">
+                      {value}
+                    </span>
+                    <span className="game-decision-value-verb">{`${value} no disponible`}</span>
+                  </span>
+                ),
+              )}
             </div>
           </>
         )}
 
         {decision.kind === 'choose-hidden-swap' && (
           <>
-            <p className="game-modal-copy">Only you can see the hidden card.</p>
+            <p className="game-modal-copy">Solo vos podés ver la carta oculta.</p>
             <div className="game-modal-cards">
               <CardPlaceholder
                 card={decision.hiddenCard}
                 showEffect
-                label={`${cardPresentation(decision.hiddenCard).name}, value ${decision.hiddenCard.value} — the hidden card`}
+                assetConfig={assetConfig}
+                label={`${cardPresentation(decision.hiddenCard).name}, valor ${decision.hiddenCard.value} — carta oculta`}
               />
-              <div className="game-modal-hand" role="group" aria-label="Your hand">
-                <h3>Your hand</h3>
+              <div className="game-modal-hand" role="group" aria-label="Tu mano">
+                <h3>Tu mano</h3>
                 {hand === null ? (
-                  <p>Your hand has not arrived yet.</p>
+                  <p>Tu mano todavía no llegó.</p>
                 ) : hand.length === 0 ? (
-                  <p>Your hand is empty right now.</p>
+                  <p>Tu mano está vacía en este momento.</p>
                 ) : (
                   hand.map((card) => (
                     <CardPlaceholder
                       key={card.instanceId}
                       card={card}
-                      label={`${cardPresentation(card).name}, value ${card.value}`}
+                      assetConfig={assetConfig}
+                      label={`${cardPresentation(card).name}, valor ${card.value}`}
                     />
                   ))
                 )}
@@ -320,7 +378,7 @@ export function PrivateDecisionModal({
                   disabled={busy}
                   onClick={() => onChooseHiddenSwap(false)}
                 >
-                  Keep my card
+                  Conservar mi carta
                 </button>
               )}
               {decision.swapAllowed && (
@@ -330,7 +388,7 @@ export function PrivateDecisionModal({
                   disabled={busy}
                   onClick={() => onChooseHiddenSwap(true)}
                 >
-                  Swap with the hidden card
+                  Cambiar por la carta oculta
                 </button>
               )}
             </div>
@@ -340,13 +398,14 @@ export function PrivateDecisionModal({
         {decision.kind === 'choose-deck-position' && (
           <>
             <p className="game-modal-copy">
-              Only you can see this card. Choose where it goes back.
+              Solo vos podés ver esta carta. Elegí dónde devolverla.
             </p>
             <div className="game-modal-cards">
               <CardPlaceholder
                 card={decision.card}
                 showEffect
-                label={`${cardPresentation(decision.card).name}, value ${decision.card.value} — the inspected card`}
+                assetConfig={assetConfig}
+                label={`${cardPresentation(decision.card).name}, valor ${decision.card.value} — carta inspeccionada`}
               />
             </div>
             <div className="game-decision-controls">

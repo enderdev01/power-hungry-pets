@@ -35,6 +35,7 @@ export type AttemptAction =
   | 'rebind'
   | 'start'
   | 'leave'
+  | 'return-lobby'
   | 'draw'
   | 'play'
   | 'choose-target'
@@ -150,29 +151,29 @@ function roomDiffNotices(prev: RoomSnapshot | null, next: RoomSnapshot): string[
   for (const player of next.players) {
     const before = prevById.get(player.playerId);
     if (before === undefined) {
-      notices.push(`${player.displayName} arrived (seat ${player.seatNumber}).`);
+      notices.push(`${player.displayName} llegó (asiento ${player.seatNumber}).`);
       continue;
     }
     if (!before.connected && player.connected) {
-      notices.push(`${player.displayName} is back.`);
+      notices.push(`${player.displayName} volvió.`);
     }
     if (before.connected && !player.connected) {
-      notices.push(`${player.displayName} stepped away.`);
+      notices.push(`${player.displayName} se desconectó.`);
     }
     if (!before.isHost && player.isHost) {
-      notices.push(`${player.displayName} now hosts the room.`);
+      notices.push(`${player.displayName} ahora es el anfitrión de la sala.`);
     }
   }
   for (const player of prev.players) {
     if (!next.players.some((candidate) => candidate.playerId === player.playerId)) {
-      notices.push(`${player.displayName} left the room.`);
+      notices.push(`${player.displayName} salió de la sala.`);
     }
   }
   if (prev.status !== next.status) {
     if (next.status === 'IN_MATCH') {
-      notices.push('The match has started.');
+      notices.push('La partida comenzó.');
     } else if (next.status === 'FINISHED') {
-      notices.push('The match has finished.');
+      notices.push('La partida terminó.');
     }
   }
   return notices;
@@ -193,15 +194,15 @@ export function roomFlowReducer(state: RoomFlowState, action: RoomFlowAction): R
       }
       let next: RoomFlowState = { ...state, connection: action.status };
       if (action.status === 'connecting' && state.connection === 'idle') {
-        next = withNotice(next, 'Connecting to the game server…', 'info');
+        next = withNotice(next, 'Conectando con el servidor del juego…', 'info');
       }
       if (action.status === 'connected') {
-        next = withNotice(next, 'Connected to the game noticeboard.', 'success');
+        next = withNotice(next, 'Conectado al tablero de juego.', 'success');
       }
       if (action.status === 'disconnected') {
         next = withNotice(
           next,
-          'Connection lost — the board is trying to reach the server again.',
+          'Se perdió la conexión. El tablero está intentando reconectarse al servidor.',
           'error',
         );
       }
@@ -222,7 +223,7 @@ export function roomFlowReducer(state: RoomFlowState, action: RoomFlowAction): R
       };
       return withNotice(
         seated,
-        `Room ${membership.code} is pinned. You host seat ${membership.seatNumber}.`,
+        `La sala ${membership.code} está lista. Sos el anfitrión del asiento ${membership.seatNumber}.`,
         'success',
       );
     }
@@ -242,14 +243,23 @@ export function roomFlowReducer(state: RoomFlowState, action: RoomFlowAction): R
         game: rejoined ? state.game : createInitialGameState(),
       };
       const text = rejoined
-        ? `Back in room ${membership.code} (seat ${membership.seatNumber}).`
-        : `You joined room ${membership.code} (seat ${membership.seatNumber}).`;
+        ? `Volviste a la sala ${membership.code} (asiento ${membership.seatNumber}).`
+        : `Ingresaste a la sala ${membership.code} (asiento ${membership.seatNumber}).`;
       return withNotice(seated, text, 'success');
     }
 
     case 'room/updated': {
       const diffNotices = roomDiffNotices(state.room, action.room);
-      let next: RoomFlowState = { ...state, room: action.room };
+      // Back to the lobby after a match: the finished game's views, results,
+      // and cues belong to that match only, so they are cleared.
+      const backToLobby =
+        action.room.status === 'LOBBY' &&
+        (state.room?.status === 'IN_MATCH' || state.room?.status === 'FINISHED');
+      let next: RoomFlowState = {
+        ...state,
+        room: action.room,
+        ...(backToLobby ? { game: createInitialGameState() } : {}),
+      };
       for (const text of diffNotices) {
         next = withNotice(next, text, 'info');
       }
@@ -268,7 +278,7 @@ export function roomFlowReducer(state: RoomFlowState, action: RoomFlowAction): R
         pendingAttempt: null,
         game: createInitialGameState(),
       };
-      return code === null ? cleared : withNotice(cleared, `You left room ${code}.`, 'info');
+      return code === null ? cleared : withNotice(cleared, `Saliste de la sala ${code}.`, 'info');
     }
 
     case 'ack/failed': {
@@ -278,7 +288,7 @@ export function roomFlowReducer(state: RoomFlowState, action: RoomFlowAction): R
       const reboundDuplicate =
         action.attempt.action === 'rebind' && action.code === 'DUPLICATE_SOCKET';
       const sentence = reboundDuplicate
-        ? 'The server still holds your earlier connection — wait a few seconds and try again.'
+        ? 'El servidor todavía conserva tu conexión anterior. Esperá unos segundos e intentá de nuevo.'
         : described.sentence;
       const recovery = reboundDuplicate ? 'rejoin' : described.recovery;
       return withNotice(

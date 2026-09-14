@@ -29,17 +29,22 @@ interface PlayerTokenRackProps {
 
 /** Visible textual total for a committed token count. */
 export function tokenLabel(count: number): string {
-  return count === 1 ? '1 victory token' : `${count} victory tokens`;
+  return count === 1 ? '1 ficha de victoria' : `${count} fichas de victoria`;
 }
 
 export function PlayerTokenRack({ name, count, motion }: PlayerTokenRackProps) {
   return (
-    <div className="game-token-rack" role="group" aria-label={`${name}: ${tokenLabel(count)}`}>
+    <div
+      className="game-token-rack"
+      role="group"
+      aria-label={`${name}: ${tokenLabel(count)}`}
+      data-count={count}
+    >
       <ul className="game-token-list" aria-hidden="true">
         {Array.from({ length: count }, (_, index) => (
           <li key={index} className="game-token-slot">
             <span className="game-token-dot" aria-hidden="true" />
-            {`Victory token ${index + 1}`}
+            {`Ficha de victoria ${index + 1}`}
           </li>
         ))}
       </ul>

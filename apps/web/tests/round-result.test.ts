@@ -352,8 +352,8 @@ describe('evaluateRoundResult', () => {
 
 describe('round result copy', () => {
   it('names exhaustion only for revealed rounds and stays honest otherwise', () => {
-    expect(roundResultReasonSentence('exhaustion')).toMatch(/draw pile ran out/i);
-    expect(roundResultReasonSentence('last-survivor')).toMatch(/last survivor/i);
+    expect(roundResultReasonSentence('exhaustion')).toMatch(/el mazo se agotó/i);
+    expect(roundResultReasonSentence('last-survivor')).toMatch(/último sobreviviente/i);
     // The client-safe protocol carries no winning hands for last-survivor
     // rounds: the copy must not promise any.
     expect(roundResultReasonSentence('last-survivor')).not.toMatch(/hand|reveal/i);
@@ -381,7 +381,7 @@ describe('nextRoundResult', () => {
     expect(second?.winnerIds).toEqual([OTHER_ID]);
   });
 
-  it('clears the visible result when a gameplay batch resumes the round', () => {
+  it('keeps the result through the next gameplay batch until it is dismissed', () => {
     const captured = nextRoundResult(
       null,
       gameEvents([{ type: 'ROUND_ENDED', winnerIds: [SELF_ID] }]),
@@ -389,7 +389,7 @@ describe('nextRoundResult', () => {
     );
     expect(
       nextRoundResult(captured, gameEvents([{ type: 'CARD_DRAWN', playerId: OTHER_ID }]), aView),
-    ).toBeNull();
+    ).toBe(captured);
   });
 
   it('does not capture from a match-ending batch', () => {

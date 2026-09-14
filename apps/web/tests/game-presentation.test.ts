@@ -12,6 +12,9 @@ import {
   resolveCardArt,
   type CardAssetConfig,
 } from '@/lib/game/asset-resolver';
+import { CARD_BACK_ART_KEY, TABLETOP_ASSET_CONFIG } from '@/lib/game/card-assets';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 
 const ALL_CARD_TYPES: CardType[] = [
   'ROBOT_ASPIRADOR_REAL',
@@ -120,5 +123,27 @@ describe('M7 asset resolver seam', () => {
 
   it('never maps a key in the shipped M7 default config', () => {
     expect(Object.keys(M7_PLACEHOLDER_ASSET_CONFIG.images)).toEqual([]);
+  });
+});
+
+describe('tabletop card asset mapping', () => {
+  it('maps every card type and the shared back to an existing web asset', () => {
+    const keys = [
+      ...ALL_CARD_TYPES.map((type) => cardPresentation({ type, value: 0 }).artKey),
+      CARD_BACK_ART_KEY,
+    ];
+    for (const key of keys) {
+      const art = resolveCardArt(key, TABLETOP_ASSET_CONFIG);
+      expect(art.kind).toBe('image');
+      if (art.kind === 'image') {
+        expect(existsSync(join(__dirname, '..', 'public', art.src))).toBe(true);
+      }
+    }
+    // One distinct file per key: no card silently reuses another card's art.
+    expect(new Set(keys.map((key) => TABLETOP_ASSET_CONFIG.images[key])).size).toBe(keys.length);
+  });
+
+  it('keeps the mapping outside game logic: unknown keys still fail closed', () => {
+    expect(resolveCardArt('card/unknown', TABLETOP_ASSET_CONFIG).kind).toBe('none');
   });
 });

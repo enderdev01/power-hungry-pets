@@ -43,7 +43,7 @@ describe('player seat avatar (M8)', () => {
 
   it('labels the seat accessibly and shows the initials', () => {
     render(<PlayerAvatar name="Bruno" />);
-    const avatar = screen.getByRole('img', { name: "Bruno's seat" });
+    const avatar = screen.getByRole('img', { name: 'Asiento de Bruno' });
     expect(avatar).toHaveTextContent('BR');
     expect(avatar).toHaveAttribute('data-avatar-variant', String(avatarVariant('Bruno')));
     // The visible initials are decorative repetition of the label.
@@ -58,7 +58,7 @@ describe('player seat avatar (M8)', () => {
 
   it('never renders a raw id: the component only accepts a display name', () => {
     render(<PlayerAvatar name="Bruno" />);
-    const avatar = screen.getByRole('img', { name: "Bruno's seat" });
+    const avatar = screen.getByRole('img', { name: 'Asiento de Bruno' });
     expect(avatar.textContent).not.toMatch(/p-/);
     expect(avatar.textContent).not.toContain('Bruno');
   });

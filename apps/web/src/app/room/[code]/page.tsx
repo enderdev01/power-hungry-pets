@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { GameTable } from '@/components/game/game-table';
 import { Lobby } from '@/components/lobby';
+import { TABLETOP_ASSET_CONFIG } from '@/lib/game/card-assets';
 import { getRoomFlowController } from '@/lib/room-flow/room-flow';
 import { useRoomFlowState } from '@/lib/room-flow/use-room-flow';
 
@@ -25,19 +26,28 @@ export default function RoomPage() {
   const roomMatchesRoute = state.roomCode === code;
   const boundToDifferentRoom = state.roomCode !== null && !roomMatchesRoute;
 
+  const inTable =
+    !boundToDifferentRoom &&
+    (state.room?.status === 'IN_MATCH' ||
+      (state.room?.status === 'FINISHED' && state.self !== null));
+
   return (
-    <main className="lobby">
+    <main className={inTable ? 'table-scene' : 'lobby'}>
       {boundToDifferentRoom ? (
         <section className="game-table-message" role="status">
-          Switching rooms — clearing the previous table.
+          Cambiando de sala y cerrando la mesa anterior.
         </section>
-      ) : state.room?.status === 'IN_MATCH' ||
-        (state.room?.status === 'FINISHED' && state.self !== null) ? (
+      ) : inTable ? (
         // A seated finished room still shows the match result through the
         // game table (WU10). A visitor with no restored seat stays on the
         // lobby entry/rebind path and never sees a finished private game's
         // result.
-        <GameTable controller={controller} state={state} />
+        <GameTable
+          controller={controller}
+          state={state}
+          assetConfig={TABLETOP_ASSET_CONFIG}
+          autoDraw
+        />
       ) : (
         <Lobby
           code={code}
