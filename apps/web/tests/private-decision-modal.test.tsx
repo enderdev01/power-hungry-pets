@@ -315,11 +315,14 @@ describe('private decision modal: Ratón reinsertion stage', () => {
       positions: [0, 1, 2],
     });
     expect(screen.getByLabelText(/Ratón Trampero, valor 2/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Parte superior del mazo' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Posición 1' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Parte inferior del mazo' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Arriba — la próxima que se roba' }),
+    ).toBeInTheDocument();
+    // Index 1 is the second card from the top: labels count draw order from 1.
+    expect(screen.getByRole('button', { name: '2.ª desde arriba' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abajo — la última del mazo' })).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Posición 1' }));
+    await userEvent.click(screen.getByRole('button', { name: '2.ª desde arriba' }));
     expect(cb.onChooseDeckPosition).toHaveBeenCalledTimes(1);
     expect(cb.onChooseDeckPosition).toHaveBeenCalledWith(1);
   });
@@ -330,8 +333,10 @@ describe('private decision modal: Ratón reinsertion stage', () => {
       card: INSPECTED_CARD,
       positions: [0],
     });
-    expect(screen.getByRole('button', { name: 'Parte superior del mazo' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Parte inferior del mazo' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Arriba — la próxima que se roba' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abajo — la última del mazo' })).toBeNull();
   });
 });
 

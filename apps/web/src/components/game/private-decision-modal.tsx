@@ -86,17 +86,19 @@ function decisionSourceCard(decision: PendingDecisionModel): CardType | null {
   }
 }
 
+/**
+ * Human draw-order label for an insertion index. Index 0 is the top card —
+ * the next one anybody draws — and index N is drawn N draws later, so the
+ * label counts cards from the top starting at 1 (index 1 is the 2nd card).
+ */
 function positionLabel(index: number, positions: number[]): string {
-  if (positions.length === 1) {
-    return 'Parte superior del mazo';
-  }
-  if (index === 0) {
-    return 'Parte superior del mazo';
+  if (positions.length === 1 || index === 0) {
+    return 'Arriba — la próxima que se roba';
   }
   if (index === Math.max(...positions)) {
-    return 'Parte inferior del mazo';
+    return 'Abajo — la última del mazo';
   }
-  return `Posición ${index}`;
+  return `${index + 1}.ª desde arriba`;
 }
 
 interface PrivateDecisionModalProps {
@@ -398,7 +400,8 @@ export function PrivateDecisionModal({
         {decision.kind === 'choose-deck-position' && (
           <>
             <p className="game-modal-copy">
-              Solo vos podés ver esta carta. Elegí dónde devolverla.
+              Solo vos podés ver esta carta. Elegí dónde devolverla: las cartas se roban de arriba
+              hacia abajo.
             </p>
             <div className="game-modal-cards">
               <CardPlaceholder

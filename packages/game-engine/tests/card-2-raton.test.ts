@@ -281,6 +281,35 @@ describe('Card 2 Ratón Trampero — CHOOSE_DECK_POSITION reinsertion positions'
   });
 });
 
+describe('Card 2 Ratón Trampero — the chosen position is the draw order', () => {
+  it('index N means the card is drawn N draws later: the next player never gets an index-2 card', () => {
+    const round = createRound(['p1', 'p2']);
+    const extra = cardOfValue(7, 'value-7-extra');
+    const { played } = stageRatonPending(round, 'p1', {
+      drawPile: [INSPECTED_CARD, DEEP_CARD_FOUR, DEEP_CARD_FIVE, extra],
+    });
+
+    const inserted = expectTurnSuccess(
+      applyTurnCommand(played.state, { type: 'CHOOSE_DECK_POSITION', actorId: 'p1', index: 2 }),
+    );
+    // Index 2 is the third card from the top.
+    expect(inserted.state.drawPile).toEqual([
+      DEEP_CARD_FOUR,
+      DEEP_CARD_FIVE,
+      INSPECTED_CARD,
+      extra,
+    ]);
+
+    const drawn = expectTurnSuccess(
+      applyTurnCommand(inserted.state, { type: 'DRAW_CARD', actorId: 'p2' }),
+    );
+    // The next player draws the top card, not the inspected one.
+    expect(playerOf(drawn.state, 'p2').hand).toContainEqual(DEEP_CARD_FOUR);
+    expect(playerOf(drawn.state, 'p2').hand).not.toContainEqual(INSPECTED_CARD);
+    expect(drawn.state.drawPile).toEqual([DEEP_CARD_FIVE, INSPECTED_CARD, extra]);
+  });
+});
+
 describe('Card 2 Ratón Trampero — invalid insertion positions', () => {
   it.each([-1, 3, 4, 0.5, Number.NaN, '0', null, undefined])(
     'rejects index %p with INVALID_POSITION, keeps the pending open, and mutates nothing',
