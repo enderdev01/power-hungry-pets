@@ -469,6 +469,191 @@ body {
   grid-template-rows: auto auto auto minmax(0, 1fr) auto;
 }
 
+/* Conejito VS overlay: both duelists, then the public outcome. */
+.game-duel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 34;
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  width: min(30rem, calc(100% - 2rem));
+  padding: 1rem 1rem 1.1rem;
+  border: 3px solid var(--arcade-coral);
+  border-radius: 1.5rem;
+  background: var(--hud-strong);
+  color: var(--ink);
+  text-align: center;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 100vmax rgba(5, 14, 18, 0.55),
+    0 1.5rem 3rem rgba(0, 0, 0, 0.55);
+  transform: translate(-50%, -50%);
+  animation: motion-duel-life 3000ms ease-out forwards;
+  --card-w: clamp(4.5rem, 20vw, 6rem);
+}
+
+.game-duel-kicker {
+  padding: 0.1rem 0.6rem;
+  border-radius: 999px;
+  background: var(--arcade-coral);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.game-duel-arena {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.game-duel-side {
+  display: grid;
+  justify-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  animation: motion-duel-enter-left 420ms ease-out both;
+}
+
+.game-duel-side + .game-duel-vs + .game-duel-side {
+  animation-name: motion-duel-enter-right;
+}
+
+.game-duel-name {
+  max-width: 100%;
+  font-size: 0.95rem;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.game-duel-card {
+  perspective: 30rem;
+}
+
+.game-duel-side[data-result='lost'] .game-duel-card {
+  animation: motion-duel-reveal 520ms ease-out 900ms both;
+}
+
+.game-duel-vs {
+  font-size: 2rem;
+  font-weight: 900;
+  color: var(--arcade-yellow);
+  text-shadow: 0 0.2rem 0 var(--arcade-coral-deep);
+  animation: motion-duel-vs 480ms ease-out 250ms both;
+}
+
+.game-duel-verdict {
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  animation: motion-duel-verdict 360ms ease-out 1100ms both;
+}
+
+.game-duel-side[data-result='won'] .game-duel-verdict {
+  background: var(--arcade-gold);
+  color: var(--ink-dark);
+}
+
+.game-duel-side[data-result='lost'] .game-duel-verdict {
+  background: #1d2326;
+  color: #ff9d90;
+  border: 1px solid #ff9d90;
+}
+
+.game-duel-side[data-result='tie'] .game-duel-verdict {
+  background: #33444a;
+  color: var(--ink);
+}
+
+.game-duel-side[data-result='lost'] .game-duel-avatar {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+
+.game-duel-caption {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+@keyframes motion-duel-life {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.9);
+  }
+  8%,
+  88% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+}
+
+@keyframes motion-duel-enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-2.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-duel-enter-right {
+  from {
+    opacity: 0;
+    transform: translateX(2.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-duel-vs {
+  from {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes motion-duel-reveal {
+  from {
+    transform: rotateY(90deg);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@keyframes motion-duel-verdict {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* Challenge announcement (z 5): a short, public headline over the stage. */
 .game-announcement {
   position: absolute;
@@ -2507,8 +2692,9 @@ body {
     transform: none;
   }
 
-  /* The result slip keeps its centering translation. */
-  .game-round-result {
+  /* Centered overlays keep their centering translation. */
+  .game-round-result,
+  .game-duel {
     transform: translate(-50%, -50%);
   }
 

@@ -100,19 +100,19 @@ describe('challenge announcements', () => {
     });
   });
 
-  it('announces a lost duel, a won duel, and a duel without victims', () => {
+  it('leaves Conejito duels to the dedicated VS overlay', () => {
     const played = {
       kind: 'card-played' as const,
       playerId: 'a',
       card: { value: 3, type: 'CONEJITO_GUERRILLERO' as const },
     };
     expect(
-      announcementForBatch([played, { kind: 'player-eliminated', playerId: 'a' }], v, 'b')?.title,
-    ).toBe('¡Duelo perdido!');
-    expect(
-      announcementForBatch([played, { kind: 'player-eliminated', playerId: 'b' }], v, 'b')?.tone,
-    ).toBe('fail');
-    expect(announcementForBatch([played], v, 'b')?.detail).toBe('Nadie quedó eliminado.');
+      announcementForBatch(
+        [played, { kind: 'duel-resolved', actorId: 'a', targetId: 'b', loserId: 'b' }],
+        v,
+        'a',
+      ),
+    ).toBeNull();
   });
 
   it('stays silent for batches without a challenge outcome', () => {

@@ -4,9 +4,8 @@
  * the server already resolved; they never reveal compared or guessed values.
  *
  * - Pecera de Cristal: the public PECERA_GUESS_RESOLVED outcome.
- * - Conejito Guerrillero: the played card plus any elimination in the same
- *   batch. No elimination means nobody fell (a tie or no legal target); the
- *   copy says exactly that and nothing more.
+ * Conejito duels are presented by the dedicated VS overlay from the public
+ * DUEL_RESOLVED outcome.
  */
 import type { PublicGameView } from '@power-hungry-pets/protocol';
 import type { MotionCue } from '@/lib/game/motion-cues';
@@ -55,36 +54,5 @@ export function announcementForBatch(
     };
   }
 
-  const duel = cues.find(
-    (cue): cue is Extract<MotionCue, { kind: 'card-played' }> =>
-      cue.kind === 'card-played' && cue.card.type === 'CONEJITO_GUERRILLERO',
-  );
-  if (duel !== undefined) {
-    const fallen = cues.find(
-      (cue): cue is Extract<MotionCue, { kind: 'player-eliminated' }> =>
-        cue.kind === 'player-eliminated',
-    );
-    const actor = nameOf(view, duel.playerId);
-    if (fallen === undefined) {
-      return {
-        tone: 'neutral',
-        title: 'Duelo sin víctimas',
-        detail: 'Nadie quedó eliminado.',
-      };
-    }
-    if (fallen.playerId === duel.playerId) {
-      return {
-        tone: 'fail',
-        title: '¡Duelo perdido!',
-        detail: you(duel.playerId) ? 'Perdiste el duelo.' : `${actor} perdió el duelo.`,
-      };
-    }
-    const loser = nameOf(view, fallen.playerId);
-    return {
-      tone: you(fallen.playerId) ? 'fail' : 'success',
-      title: you(fallen.playerId) ? '¡Duelo perdido!' : '¡Duelo ganado!',
-      detail: you(fallen.playerId) ? `${actor} te ganó el duelo.` : `${actor} eliminó a ${loser}.`,
-    };
-  }
   return null;
 }

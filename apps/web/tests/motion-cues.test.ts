@@ -96,6 +96,15 @@ describe('motion cue derivation', () => {
     ]);
   });
 
+  it('derives a value-free Conejito duel cue, including ties', () => {
+    const next = deriveMotionCues(createInitialMotionCueState(), [
+      { type: 'DUEL_RESOLVED', actorId: 'a', targetId: 'b', loserId: null },
+    ]);
+    expect(next.lastBatch?.cues).toEqual([
+      { kind: 'duel-resolved', actorId: 'a', targetId: 'b', loserId: null },
+    ]);
+  });
+
   it('treats an empty batch as no motion and keeps the previous state', () => {
     const prev: MotionCueState = {
       sequence: 2,

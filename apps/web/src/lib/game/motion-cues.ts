@@ -32,7 +32,8 @@ export type MotionCue =
   | { kind: 'protection-expired'; playerId: string }
   | { kind: 'player-eliminated'; playerId: string }
   | { kind: 'token-awarded'; playerId: string }
-  | { kind: 'pecera-resolved'; actorId: string; targetId: string; correct: boolean };
+  | { kind: 'pecera-resolved'; actorId: string; targetId: string; correct: boolean }
+  | { kind: 'duel-resolved'; actorId: string; targetId: string; loserId: string | null };
 
 /**
  * Reducer-owned motion-cue state: a monotonic sequence that advances exactly
@@ -166,6 +167,18 @@ function toCue(event: unknown): MotionCue | null {
             actorId: event.actorId,
             targetId: event.targetId,
             correct: event.correct,
+          }
+        : null;
+    case 'DUEL_RESOLVED':
+      // Public duel outcome only: participants and loser (or a tie).
+      return typeof event.actorId === 'string' &&
+        typeof event.targetId === 'string' &&
+        (event.loserId === null || typeof event.loserId === 'string')
+        ? {
+            kind: 'duel-resolved',
+            actorId: event.actorId,
+            targetId: event.targetId,
+            loserId: event.loserId as string | null,
           }
         : null;
     case 'TOKEN_AWARDED':

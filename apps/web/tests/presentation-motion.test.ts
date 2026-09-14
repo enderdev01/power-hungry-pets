@@ -1290,7 +1290,7 @@ describe('motion stylesheet contract (static source)', () => {
     }
     const AMBIENT = ['motion-turn-halo', 'motion-deck-ready'];
     for (const [, name, duration, rest] of animations) {
-      if (name === 'motion-announce') {
+      if (name === 'motion-announce' || name === 'motion-duel-life') {
         // An announcement holds long enough to read, then fades on its own.
         expect(Number(duration)).toBeLessThanOrEqual(3000);
         continue;

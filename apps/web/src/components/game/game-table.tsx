@@ -94,6 +94,96 @@ function ResultPreset({ outcome, headline, detail, assetConfig }: ResultPresetPr
   );
 }
 
+/** How long the Conejito VS overlay stays before results continue. */
+const DUEL_OVERLAY_MS = 3000;
+
+interface DuelSnapshot {
+  sequence: number;
+  actorId: string;
+  targetId: string;
+  loserId: string | null;
+  /** Round the duel happened in (pre-batch projection). */
+  roundNumber: number | null;
+  /** The viewer's own compared card, only when the viewer took part. */
+  ownCard: PublicCard | null;
+}
+
+interface DuelOverlayProps {
+  duel: DuelSnapshot;
+  view: PublicGameView;
+  viewerId: string | null;
+  assetConfig?: CardAssetConfig;
+}
+
+/**
+ * Conejito VS overlay. Built only from public data: the duel participants
+ * and loser, the loser's elimination-revealed card, and — for a participant —
+ * that viewer's own hand card. The winner's card stays face down for
+ * everyone else; compared values are never shown otherwise.
+ */
+function DuelOverlay({ duel, view, viewerId, assetConfig }: DuelOverlayProps) {
+  const nameOf = (id: string) => view.players.find((player) => player.id === id)?.name ?? '—';
+  const side = (id: string) => {
+    const player = view.players.find((candidate) => candidate.id === id);
+    const result = duel.loserId === null ? 'tie' : duel.loserId === id ? 'lost' : 'won';
+    // The loser's public reveal counts only while the projection is still the
+    // duel's round; a round that already advanced never lends its cards.
+    const sameRound = duel.roundNumber !== null && view.round?.roundNumber === duel.roundNumber;
+    const revealed =
+      result === 'lost' && sameRound
+        ? [...(player?.discards ?? [])].reverse().find((d) => d.origin === 'ELIMINATION_REVEAL')
+            ?.card
+        : undefined;
+    const own = id === viewerId ? (duel.ownCard ?? undefined) : undefined;
+    const card = own ?? revealed;
+    return (
+      <div className="game-duel-side" data-result={result}>
+        <span className="game-duel-avatar" aria-hidden="true">
+          <PlayerAvatar name={nameOf(id)} />
+        </span>
+        <strong className="game-duel-name">{nameOf(id)}</strong>
+        <span className="game-duel-card" aria-hidden="true">
+          {card !== undefined ? (
+            <CardPlaceholder
+              card={{ value: card.value, type: card.type }}
+              assetConfig={assetConfig}
+            />
+          ) : (
+            <CardPlaceholder faceDown assetConfig={assetConfig} label="" />
+          )}
+        </span>
+        <span className="game-duel-verdict">
+          {result === 'won' ? '¡Ganó!' : result === 'lost' ? 'Eliminado' : 'Empate'}
+        </span>
+      </div>
+    );
+  };
+  const caption =
+    duel.loserId === null
+      ? `Duelo entre ${nameOf(duel.actorId)} y ${nameOf(duel.targetId)}: empate, nadie quedó eliminado.`
+      : `${nameOf(duel.actorId)} retó a ${nameOf(duel.targetId)}: ${nameOf(duel.loserId)} quedó eliminado.`;
+  return (
+    <div
+      key={`duel-${duel.sequence}`}
+      className="game-duel"
+      data-outcome={duel.loserId === null ? 'tie' : 'decided'}
+      role="status"
+    >
+      <span className="game-duel-kicker" aria-hidden="true">
+        Conejito Guerrillero
+      </span>
+      <div className="game-duel-arena">
+        {side(duel.actorId)}
+        <span className="game-duel-vs" aria-hidden="true">
+          VS
+        </span>
+        {side(duel.targetId)}
+      </div>
+      <p className="game-duel-caption">{caption}</p>
+    </div>
+  );
+}
+
 /** Visual deck thickness bucket from the public draw-pile count. */
 function deckStackLevel(count: number): 'empty' | 'low' | 'mid' | 'high' {
   if (count <= 0) return 'empty';
@@ -423,6 +513,16 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
   const controls = evaluateTurnControls(privateView, viewerId);
 
   const [dismissedResult, setDismissedResult] = useState<RoundResultEvidence | null>(null);
+  // Conejito duel overlay: the public DUEL_RESOLVED outcome, shown before the
+  // round/match result and the next automatic draw.
+  const [duel, setDuel] = useState<DuelSnapshot | null>(null);
+  useEffect(() => {
+    if (duel === null) {
+      return;
+    }
+    const timer = setTimeout(() => setDuel(null), DUEL_OVERLAY_MS);
+    return () => clearTimeout(timer);
+  }, [duel]);
   // Auto-draw: one attempt per published draw opportunity. A failed attempt
   // is not retried in a loop; the error slip offers the explicit retry.
   const autoDrawKeyRef = useRef<string | null>(null);
@@ -433,7 +533,7 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
   // The viewer reads the round result first: auto-draw waits for Continue.
   const resultPending = game.roundResult !== null && game.roundResult !== dismissedResult;
   useEffect(() => {
-    if (!autoDraw || drawKey === null || busy !== null || resultPending) {
+    if (!autoDraw || drawKey === null || busy !== null || resultPending || duel !== null) {
       return;
     }
     if (autoDrawKeyRef.current === drawKey) {
@@ -441,7 +541,7 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
     }
     autoDrawKeyRef.current = drawKey;
     void controller.drawCard();
-  }, [autoDraw, drawKey, busy, controller, resultPending]);
+  }, [autoDraw, drawKey, busy, controller, resultPending, duel]);
 
   // Shared discard pile arrival order (presentation only).
   const pileOrderRef = useRef<PileKey[]>([]);
@@ -522,6 +622,29 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
       return;
     }
     announcedSequenceRef.current = lastBatch.sequence;
+    const duelCue = lastBatch.cues.find(
+      (cue): cue is Extract<(typeof lastBatch.cues)[number], { kind: 'duel-resolved' }> =>
+        cue.kind === 'duel-resolved',
+    );
+    if (duelCue !== undefined) {
+      // Snapshot what this viewer legitimately knows at duel time: their own
+      // compared card (never the opponent's) and the round it belongs to.
+      const participant = viewerId === duelCue.actorId || viewerId === duelCue.targetId;
+      const hand = ownHand ?? [];
+      const ownCard = !participant
+        ? null
+        : viewerId === duelCue.actorId && hand.length > 1
+          ? (hand.find((card) => card.type !== 'CONEJITO_GUERRILLERO') ?? hand[hand.length - 1]!)
+          : (hand[0] ?? null);
+      setDuel({
+        sequence: lastBatch.sequence,
+        actorId: duelCue.actorId,
+        targetId: duelCue.targetId,
+        loserId: duelCue.loserId,
+        roundNumber: publicView?.round?.roundNumber ?? null,
+        ownCard: ownCard === null ? null : { value: ownCard.value, type: ownCard.type },
+      });
+    }
     const next = announcementForBatch(lastBatch.cues, publicView, viewerId);
     if (next !== null) {
       setAnnouncement({ ...next, sequence: lastBatch.sequence });
@@ -558,7 +681,10 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
   // hidden (not discarded) so its Continue is never visible-but-inert behind
   // the modal. When the modal closes, the slip returns if the evidence remains.
   const resultVisible =
-    !decisionOpen && game.roundResult !== null && game.roundResult !== dismissedResult;
+    !decisionOpen &&
+    duel === null &&
+    game.roundResult !== null &&
+    game.roundResult !== dismissedResult;
   const continueRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
     if (resultVisible) {
@@ -641,7 +767,7 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
     };
   };
 
-  if (matchResult.kind === 'visible') {
+  if (matchResult.kind === 'visible' && duel === null) {
     return (
       <>
         <section className="game-match-result" role="status" aria-label="Resultado de la partida">
@@ -785,6 +911,15 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
           </p>
           {pending !== null && <p className="game-pending">{pending}</p>}
         </header>
+
+        {duel !== null && (
+          <DuelOverlay
+            duel={duel}
+            view={publicView}
+            viewerId={viewerId}
+            assetConfig={assetConfig}
+          />
+        )}
 
         {announcement !== null && !resultVisible && (
           <div

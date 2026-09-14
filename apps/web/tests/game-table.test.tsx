@@ -11,7 +11,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { GameTable } from '@/components/game/game-table';
 import { TABLETOP_ASSET_CONFIG } from '@/lib/game/card-assets';
@@ -1999,6 +1999,118 @@ describe('game table center-action stage (M8 finish)', () => {
     expect(piles?.[2]).toHaveTextContent('Carta oculta');
     expect(screen.getByText(/^18 cartas$/i)).toBeInTheDocument();
     expect(screen.getByText(/^1 boca abajo$/i)).toBeInTheDocument();
+  });
+});
+
+describe('Conejito duel overlay', () => {
+  const DUEL_VIEW = viewWithDiscards(
+    [{ card: { value: 3, type: 'CONEJITO_GUERRILLERO' }, origin: 'PLAYED' }],
+    [{ card: { value: 2, type: 'RATON_TRAMPERO' }, origin: 'ELIMINATION_REVEAL' }],
+  );
+  const DUEL_EVENTS: GamePublicEvent[] = [
+    { type: 'CARD_PLAYED', playerId: SELF_ID, card: { value: 3, type: 'CONEJITO_GUERRILLERO' } },
+    { type: 'DUEL_RESOLVED', actorId: SELF_ID, targetId: OTHER_ID, loserId: OTHER_ID },
+    { type: 'PLAYER_ELIMINATED', playerId: OTHER_ID },
+  ];
+
+  it('shows both duelists, the winner, and only the loser’s public card', () => {
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: DUEL_VIEW })}
+      />,
+    );
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: DUEL_VIEW, motionCue: motionCueFrom(DUEL_EVENTS) })}
+      />,
+    );
+    const duel = document.querySelector('.game-duel') as HTMLElement;
+    expect(duel).not.toBeNull();
+    expect(within(duel).getByText('Ana retó a Bruno: Bruno quedó eliminado.')).toBeInTheDocument();
+    const [actorSide, targetSide] = [...duel.querySelectorAll('.game-duel-side')] as HTMLElement[];
+    expect(actorSide).toHaveAttribute('data-result', 'won');
+    expect(targetSide).toHaveAttribute('data-result', 'lost');
+    // The loser's elimination-revealed card is public and shown face up.
+    expect(targetSide.querySelector('[data-art-key="card/raton-trampero"]')).not.toBeNull();
+    // No compared value is announced anywhere in the caption.
+    expect(within(duel).queryByText(/valor/)).toBeNull();
+  });
+
+  it('never shows a card from a round that already advanced', () => {
+    const { rerender } = render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: DUEL_VIEW })}
+      />,
+    );
+    // The duel batch arrives while the table still shows the duel's round...
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: DUEL_VIEW, motionCue: motionCueFrom(DUEL_EVENTS) })}
+      />,
+    );
+    // ...then the next round's projection lands (new round number).
+    const nextRound = { ...DUEL_VIEW, round: { ...DUEL_VIEW.round!, roundNumber: 2 } };
+    rerender(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: nextRound, motionCue: motionCueFrom(DUEL_EVENTS) })}
+      />,
+    );
+    const targetSide = document.querySelectorAll('.game-duel-side')[1] as HTMLElement;
+    expect(targetSide.querySelector('.game-card-placeholder-back')).not.toBeNull();
+    expect(targetSide.querySelector('[data-art-key]')).toBeNull();
+  });
+
+  it('never replays a duel that was already resolved before the table mounted', () => {
+    render(
+      <GameTable
+        controller={controllerStub() as RoomFlowController}
+        state={flowState({ publicView: DUEL_VIEW, motionCue: motionCueFrom(DUEL_EVENTS) })}
+      />,
+    );
+    expect(document.querySelector('.game-duel')).toBeNull();
+  });
+
+  it('holds the round result until the duel has been shown', () => {
+    jest.useFakeTimers();
+    try {
+      const evidence = {
+        roundNumber: 1,
+        winnerIds: [SELF_ID],
+        awards: [],
+        reason: 'last-survivor' as const,
+        revealedHands: [],
+      };
+      const { rerender } = render(
+        <GameTable
+          controller={controllerStub() as RoomFlowController}
+          state={flowState({ publicView: DUEL_VIEW })}
+        />,
+      );
+      rerender(
+        <GameTable
+          controller={controllerStub() as RoomFlowController}
+          state={flowState({
+            publicView: DUEL_VIEW,
+            motionCue: motionCueFrom(DUEL_EVENTS),
+            roundResult: evidence,
+          })}
+        />,
+      );
+      expect(document.querySelector('.game-duel')).not.toBeNull();
+      expect(screen.queryByRole('status', { name: 'Resultado de la ronda' })).toBeNull();
+      act(() => {
+        jest.advanceTimersByTime(3100);
+      });
+      expect(document.querySelector('.game-duel')).toBeNull();
+      expect(screen.getByRole('status', { name: 'Resultado de la ronda' })).toBeInTheDocument();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
