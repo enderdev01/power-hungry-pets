@@ -8,7 +8,7 @@ import { describeAckError } from '@/lib/room-flow/ack-errors';
 describe('describeAckError', () => {
   it('explains a full room and points back to editing the input', () => {
     expect(describeAckError('ROOM_FULL')).toEqual({
-      sentence: expect.stringContaining('6 players'),
+      sentence: expect.stringContaining('6 jugadores'),
       recovery: 'edit-input',
     });
   });
@@ -18,19 +18,19 @@ describe('describeAckError', () => {
       sentence: expect.any(String),
       recovery: 'edit-input',
     });
-    expect(describeAckError('ROOM_NOT_FOUND').sentence).toMatch(/code/i);
+    expect(describeAckError('ROOM_NOT_FOUND').sentence).toMatch(/código/i);
   });
 
   it('explains an unusable display name', () => {
     const described = describeAckError('INVALID_DISPLAY_NAME');
     expect(described.recovery).toBe('edit-input');
-    expect(described.sentence).toMatch(/name/i);
+    expect(described.sentence).toMatch(/nombre/i);
   });
 
   it('explains that only the host can start', () => {
     const described = describeAckError('NOT_HOST');
     expect(described.recovery).toBe('none');
-    expect(described.sentence).toMatch(/host/i);
+    expect(described.sentence).toMatch(/anfitrión/i);
   });
 
   it('offers a retry for rate limiting and internal failures', () => {

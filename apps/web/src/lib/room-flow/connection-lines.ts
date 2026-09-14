@@ -8,13 +8,13 @@ import type { ConnectionStatus } from '@/lib/room-flow/reducer';
 export function connectionLine(status: ConnectionStatus): string {
   switch (status) {
     case 'idle':
-      return 'Reach the noticeboard: pin a new room or join with a code.';
+      return 'Accedé al tablero: creá una sala o ingresá con un código.';
     case 'connecting':
-      return 'Reaching the game noticeboard…';
+      return 'Conectando con el tablero de juego…';
     case 'connected':
-      return 'Connected.';
+      return 'Conectado.';
     case 'disconnected':
-      return 'Connection lost — the board is trying to reach the server again.';
+      return 'Se perdió la conexión. El tablero está intentando reconectarse al servidor.';
     default:
       return '';
   }

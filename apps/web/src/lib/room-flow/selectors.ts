@@ -41,12 +41,12 @@ export function evaluateStart(
 export function startBlockMessage(reason: StartBlockReason): string {
   switch (reason) {
     case 'not-host':
-      return 'Only the room host can start the match.';
+      return 'Solo el anfitrión de la sala puede comenzar la partida.';
     case 'min-players':
-      return `Waiting for at least ${MIN_SEATS_TO_START_MATCH} players to start.`;
+      return `Se necesitan al menos ${MIN_SEATS_TO_START_MATCH} jugadores para comenzar.`;
     case 'room-status':
-      return 'The match is not waiting in the lobby anymore.';
+      return 'La partida ya no está esperando en la sala.';
     case 'not-connected':
-      return 'Reconnect before starting the match.';
+      return 'Reconectate antes de comenzar la partida.';
   }
 }

@@ -34,7 +34,7 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
   function handleJoin(): void {
     const normalized = code.trim().toUpperCase();
     if (normalized.length !== ROOM_CODE_LENGTH) {
-      setCodeProblem(`Room codes are ${ROOM_CODE_LENGTH} characters.`);
+      setCodeProblem(`Los códigos de sala tienen ${ROOM_CODE_LENGTH} caracteres.`);
       return;
     }
     setCodeProblem(null);
@@ -46,7 +46,7 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
       <header className="masthead">
         <p className="wordmark">POWER HUNGRY PETS</p>
         <p className="masthead-line">
-          A private table for 2–6 players. No account — just a name on a slip.
+          Una mesa privada para 2–6 jugadores. Sin cuenta: solo un nombre en una ficha.
         </p>
       </header>
 
@@ -62,7 +62,7 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
                 void controller.retry();
               }}
             >
-              Try again
+              Intentar de nuevo
             </button>
           )}
           {state.error.recovery === 'edit-input' && (
@@ -73,19 +73,19 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
                 controller.clearError();
               }}
             >
-              Back to the form
+              Volver al formulario
             </button>
           )}
         </section>
       )}
 
-      <section className="slip invitation" aria-label="Room invitation">
+      <section className="slip invitation" aria-label="Invitación de la sala">
         <span className="pin" aria-hidden="true" />
-        <h1 className="invitation-title">Tonight&apos;s invitation</h1>
+        <h1 className="invitation-title">La invitación de esta noche</h1>
 
         <div className="field">
           <label className="field-label" htmlFor="display-name">
-            Your name
+            Tu nombre
           </label>
           <input
             id="display-name"
@@ -106,16 +106,16 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
               void handleCreate();
             }}
           >
-            {state.busy === 'create' ? 'Pinning the room…' : 'Pin a new room'}
+            {state.busy === 'create' ? 'Creando la sala…' : 'Crear una sala'}
           </button>
 
           <p className="divider" aria-hidden="true">
-            — or —
+            — o —
           </p>
 
           <div className="field">
             <label className="field-label" htmlFor="room-code">
-              Room code
+              Código de sala
             </label>
             <div className="join-row">
               <input
@@ -138,7 +138,7 @@ export function HomeInvitation({ controller, navigate }: HomeInvitationProps) {
                 disabled={creating}
                 onClick={handleJoin}
               >
-                {state.busy === 'join' ? 'Joining…' : 'Join a room'}
+                {state.busy === 'join' ? 'Ingresando…' : 'Entrar a una sala'}
               </button>
             </div>
             {codeProblem !== null && (

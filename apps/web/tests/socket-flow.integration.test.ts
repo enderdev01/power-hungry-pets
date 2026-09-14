@@ -67,7 +67,7 @@ describe('two-tab room flow against the real gateway', () => {
         .getState()
         .notices.map((n) => n.text)
         .join(' '),
-    ).toContain('You host seat 1');
+    ).toContain('Sos el anfitrión del asiento 1');
 
     // Tab B joins the same room by code; tab A must see the arrival live.
     const seenArrival = waitUntil(tabA, (s) => (s.room?.players.length ?? 0) === 2);
@@ -82,7 +82,7 @@ describe('two-tab room flow against the real gateway', () => {
         .getState()
         .notices.map((n) => n.text)
         .join(' '),
-    ).toContain('Bruno arrived (seat 2).');
+    ).toContain('Bruno llegó (asiento 2).');
 
     // Non-host cannot start: typed NOT_HOST, room unchanged.
     const guestStarted = await tabB.startMatch();
@@ -100,13 +100,13 @@ describe('two-tab room flow against the real gateway', () => {
         .getState()
         .notices.map((n) => n.text)
         .join(' '),
-    ).toContain('The match has started.');
+    ).toContain('La partida comenzó.');
     expect(
       tabB
         .getState()
         .notices.map((n) => n.text)
         .join(' '),
-    ).toContain('The match has started.');
+    ).toContain('La partida comenzó.');
 
     await fixture.close();
   });

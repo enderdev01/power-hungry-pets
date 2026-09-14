@@ -77,7 +77,7 @@ describe('HomeInvitation', () => {
     const { controller } = controllerWithCreate(() => Promise.reject(new Error('not scripted')));
     render(<HomeInvitation controller={controller} navigate={() => {}} />);
 
-    expect(screen.getByRole('button', { name: /pin a new room/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /crear una sala/i })).toBeDisabled();
   });
 
   it('creates a room and navigates to its lobby', async () => {
@@ -94,8 +94,8 @@ describe('HomeInvitation', () => {
     const navigate = jest.fn();
     render(<HomeInvitation controller={controller} navigate={navigate} />);
 
-    await userEvent.type(screen.getByLabelText(/your name/i), 'Ana');
-    await userEvent.click(screen.getByRole('button', { name: /pin a new room/i }));
+    await userEvent.type(screen.getByLabelText(/tu nombre/i), 'Ana');
+    await userEvent.click(screen.getByRole('button', { name: /crear una sala/i }));
 
     expect(calls.createRoom).toBe(1);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/room/ABC12'));
@@ -111,10 +111,10 @@ describe('HomeInvitation', () => {
     );
     render(<HomeInvitation controller={controller} navigate={() => {}} />);
 
-    await userEvent.type(screen.getByLabelText(/your name/i), 'Ana');
-    const createPromise = userEvent.click(screen.getByRole('button', { name: /pin a new room/i }));
+    await userEvent.type(screen.getByLabelText(/tu nombre/i), 'Ana');
+    const createPromise = userEvent.click(screen.getByRole('button', { name: /crear una sala/i }));
 
-    expect(await screen.findByText(/pinning the room/i)).toBeInTheDocument();
+    expect(await screen.findByText(/creando la sala/i)).toBeInTheDocument();
     resolveCreate({
       roomId: 'room-1',
       code: 'ABC12',
@@ -132,11 +132,11 @@ describe('HomeInvitation', () => {
     );
     render(<HomeInvitation controller={controller} navigate={() => {}} />);
 
-    await userEvent.type(screen.getByLabelText(/your name/i), '   ');
-    await userEvent.click(screen.getByRole('button', { name: /pin a new room/i }));
+    await userEvent.type(screen.getByLabelText(/tu nombre/i), '   ');
+    await userEvent.click(screen.getByRole('button', { name: /crear una sala/i }));
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /back to the form/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /volver al formulario/i })).toBeInTheDocument();
   });
 
   it('navigates a well-formed code to the lobby without socket traffic', async () => {
@@ -146,8 +146,8 @@ describe('HomeInvitation', () => {
     const navigate = jest.fn();
     render(<HomeInvitation controller={controller} navigate={navigate} />);
 
-    await userEvent.type(screen.getByLabelText(/room code/i), 'abc12');
-    await userEvent.click(screen.getByRole('button', { name: /join a room/i }));
+    await userEvent.type(screen.getByLabelText(/código de sala/i), 'abc12');
+    await userEvent.click(screen.getByRole('button', { name: /entrar a una sala/i }));
 
     expect(calls.createRoom).toBe(0);
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/room/ABC12'));
@@ -158,10 +158,10 @@ describe('HomeInvitation', () => {
     const navigate = jest.fn();
     render(<HomeInvitation controller={controller} navigate={navigate} />);
 
-    await userEvent.type(screen.getByLabelText(/room code/i), 'AB1');
-    await userEvent.click(screen.getByRole('button', { name: /join a room/i }));
+    await userEvent.type(screen.getByLabelText(/código de sala/i), 'AB1');
+    await userEvent.click(screen.getByRole('button', { name: /entrar a una sala/i }));
 
-    expect(screen.getByText(/room codes are 5 characters/i)).toBeInTheDocument();
+    expect(screen.getByText(/los códigos de sala tienen 5 caracteres/i)).toBeInTheDocument();
     expect(navigate).not.toHaveBeenCalled();
   });
 
@@ -170,12 +170,12 @@ describe('HomeInvitation', () => {
     const navigate = jest.fn();
     render(<HomeInvitation controller={controller} navigate={navigate} />);
 
-    await userEvent.type(screen.getByLabelText(/room code/i), 'AB1');
-    await userEvent.click(screen.getByRole('button', { name: /join a room/i }));
+    await userEvent.type(screen.getByLabelText(/código de sala/i), 'AB1');
+    await userEvent.click(screen.getByRole('button', { name: /entrar a una sala/i }));
 
-    const message = screen.getByText(/room codes are 5 characters/i);
+    const message = screen.getByText(/los códigos de sala tienen 5 caracteres/i);
     expect(message).toHaveAttribute('id', 'room-code-problem');
-    const codeInput = screen.getByLabelText(/room code/i);
+    const codeInput = screen.getByLabelText(/código de sala/i);
     expect(codeInput).toHaveAttribute('aria-invalid', 'true');
     expect(codeInput).toHaveAttribute('aria-describedby', 'room-code-problem');
   });
@@ -185,10 +185,10 @@ describe('HomeInvitation', () => {
     const navigate = jest.fn();
     render(<HomeInvitation controller={controller} navigate={navigate} />);
 
-    await userEvent.type(screen.getByLabelText(/room code/i), 'ABC12');
-    await userEvent.click(screen.getByRole('button', { name: /join a room/i }));
+    await userEvent.type(screen.getByLabelText(/código de sala/i), 'ABC12');
+    await userEvent.click(screen.getByRole('button', { name: /entrar a una sala/i }));
 
-    expect(screen.getByLabelText(/room code/i)).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.getByLabelText(/código de sala/i)).toHaveAttribute('aria-invalid', 'false');
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/room/ABC12'));
   });
 
@@ -196,6 +196,6 @@ describe('HomeInvitation', () => {
     const { controller } = controllerWithCreate(() => Promise.reject(new Error('not scripted')));
     render(<HomeInvitation controller={controller} navigate={() => {}} />);
 
-    expect(screen.getByText(/reach the noticeboard/i)).toBeInTheDocument();
+    expect(screen.getByText(/accedé al tablero/i)).toBeInTheDocument();
   });
 });

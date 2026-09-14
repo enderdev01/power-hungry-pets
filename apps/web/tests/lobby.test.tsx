@@ -97,7 +97,7 @@ describe('Lobby', () => {
     expect(screen.getByText('ABC12')).toBeInTheDocument();
     expect(screen.getByText(/Ana/)).toBeInTheDocument();
     expect(screen.getByText(/Bruno/)).toBeInTheDocument();
-    expect(screen.getByText('HOST')).toBeInTheDocument();
+    expect(screen.getByText('ANFITRIÓN')).toBeInTheDocument();
   });
 
   it('marks an away player with text, not just color', async () => {
@@ -108,7 +108,7 @@ describe('Lobby', () => {
     const controller = await seededController(away, { as: 'host' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    expect(screen.getByText('away')).toBeInTheDocument();
+    expect(screen.getByText('ausente')).toBeInTheDocument();
   });
 
   it('disables the host start with the minimum-count reason at one player', async () => {
@@ -116,16 +116,16 @@ describe('Lobby', () => {
     const controller = await seededController(alone, { as: 'host' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    const start = screen.getByRole('button', { name: /start the match/i });
+    const start = screen.getByRole('button', { name: /comenzar la partida/i });
     expect(start).toBeDisabled();
-    expect(screen.getByText(/waiting for at least 2 players/i)).toBeInTheDocument();
+    expect(screen.getByText(/se necesitan al menos 2 jugadores/i)).toBeInTheDocument();
   });
 
   it('enables the host start at two players and starts through the controller', async () => {
     const controller = await seededController(LOBBY_TWO, { as: 'host' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    const start = screen.getByRole('button', { name: /start the match/i });
+    const start = screen.getByRole('button', { name: /comenzar la partida/i });
     expect(start).toBeEnabled();
     await userEvent.click(start);
     await waitFor(() => {
@@ -137,8 +137,8 @@ describe('Lobby', () => {
     const controller = await seededController(LOBBY_TWO, { as: 'guest' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    expect(screen.queryByRole('button', { name: /start the match/i })).toBeNull();
-    expect(screen.getByText(/waiting for ana/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /comenzar la partida/i })).toBeNull();
+    expect(screen.getByText(/esperando a que ana/i)).toBeInTheDocument();
   });
 
   it('copies an invite link and confirms it textually', async () => {
@@ -147,11 +147,11 @@ describe('Lobby', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /copy invite/i }));
+    await userEvent.click(screen.getByRole('button', { name: /copiar enlace de invitación/i }));
 
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/room/ABC12'));
     await waitFor(() => {
-      expect(screen.getByText(/invite link copied/i)).toBeInTheDocument();
+      expect(screen.getByText(/se copió el enlace de invitación/i)).toBeInTheDocument();
     });
   });
 
@@ -160,17 +160,17 @@ describe('Lobby', () => {
     Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /copy invite/i }));
+    await userEvent.click(screen.getByRole('button', { name: /copiar enlace de invitación/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/copy failed/i)).toBeInTheDocument();
+      expect(screen.getByText(/no se pudo copiar el enlace/i)).toBeInTheDocument();
     });
   });
 
   it('shows a connection line that names each transport state', async () => {
     const controller = await seededController(LOBBY_TWO, { as: 'host' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
-    expect(screen.getByText('Connected.')).toBeInTheDocument();
+    expect(screen.getByText('Conectado.')).toBeInTheDocument();
   });
 
   it('renders the recovery banner with retry for retryable server errors', async () => {
@@ -180,11 +180,11 @@ describe('Lobby', () => {
     });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /start the match/i }));
+    await userEvent.click(screen.getByRole('button', { name: /comenzar la partida/i }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /intentar de nuevo/i })).toBeInTheDocument();
   });
 
   it('confirms a leave and hands control back to navigation', async () => {
@@ -192,7 +192,7 @@ describe('Lobby', () => {
     const navigate = jest.fn();
     render(<Lobby code="ABC12" controller={controller} navigate={navigate} />);
 
-    await userEvent.click(screen.getByRole('button', { name: /leave the room/i }));
+    await userEvent.click(screen.getByRole('button', { name: /salir de la sala/i }));
 
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
     expect(controller.getState().self).toBeNull();
@@ -204,16 +204,16 @@ describe('Lobby', () => {
 
     const log = screen.getByRole('log');
     expect(log).toHaveAttribute('aria-live', 'polite');
-    expect(screen.getByText(/You joined room ABC12/)).toBeInTheDocument();
+    expect(screen.getByText(/Ingresaste a la sala ABC12/)).toBeInTheDocument();
   });
 
   it('shows the started-match state instead of lobby actions once IN_MATCH', async () => {
     const controller = await seededController(LOBBY_TWO, { as: 'host' });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
-    await userEvent.click(screen.getByRole('button', { name: /start the match/i }));
+    await userEvent.click(screen.getByRole('button', { name: /comenzar la partida/i }));
 
-    await screen.findByText(/follow the game table/i);
-    expect(screen.queryByRole('button', { name: /start the match/i })).toBeNull();
+    await screen.findByText(/seguí el juego en la mesa/i);
+    expect(screen.queryByRole('button', { name: /comenzar la partida/i })).toBeNull();
   });
 });
 
@@ -232,8 +232,8 @@ describe('Lobby stale-state and label safety', () => {
     const controller = createRoomFlowController(gateway, { stores: createMemoryStores() });
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    expect(await screen.findByLabelText('Your name')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /pin me to this room/i })).toBeInTheDocument();
+    expect(await screen.findByLabelText('Tu nombre')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /unirme a esta sala/i })).toBeInTheDocument();
   });
 
   it('clears the previous room when the lobby renders a different code', async () => {
@@ -242,7 +242,7 @@ describe('Lobby stale-state and label safety', () => {
 
     await waitFor(() => expect(controller.getState().self).toBeNull());
     expect(controller.getState().room).toBeNull();
-    expect(await screen.findByLabelText('Your name')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Tu nombre')).toBeInTheDocument();
   });
 });
 
@@ -268,17 +268,19 @@ describe('Lobby finish-review fixes', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'ABC12' })).toBeInTheDocument();
     expect(
-      screen.getByRole('heading', { level: 2, name: /players \(2\/6\)/i }),
+      screen.getByRole('heading', { level: 2, name: /jugadores \(2\/6\)/i }),
     ).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: /host actions/i })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 2, name: /notices/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { level: 2, name: /acciones del anfitrión/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: /avisos/i })).toBeInTheDocument();
   });
 
   it('fills the empty roster with honest copy before any slip is pinned', async () => {
     const controller = unseatedController();
     render(<Lobby code="ABC12" controller={controller} navigate={() => {}} />);
 
-    expect(await screen.findByText(/no slips pinned yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/todavía no hay fichas en el tablero/i)).toBeInTheDocument();
   });
 
   it('gives pre-seat users an in-page way back to the invitation', async () => {
@@ -286,7 +288,7 @@ describe('Lobby finish-review fixes', () => {
     const navigate = jest.fn();
     render(<Lobby code="ABC12" controller={controller} navigate={navigate} />);
 
-    const back = await screen.findByRole('button', { name: /back to the invitation/i });
+    const back = await screen.findByRole('button', { name: /volver a la invitación/i });
     await userEvent.click(back);
     expect(navigate).toHaveBeenCalledWith('/');
   });

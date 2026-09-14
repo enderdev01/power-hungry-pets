@@ -21,6 +21,8 @@ describe('root layout viewport contract (M8 correction)', () => {
   it('keeps the existing page metadata intact', () => {
     expect(source).toMatch(/export\s+const\s+metadata:\s*Metadata\s*=\s*{/);
     expect(source).toContain("title: 'Power Hungry Pets'");
-    expect(source).toContain('A private online table for the Power Hungry Pets card game.');
+    expect(source).toContain(
+      'Una mesa privada en línea para el juego de cartas Power Hungry Pets.',
+    );
   });
 });

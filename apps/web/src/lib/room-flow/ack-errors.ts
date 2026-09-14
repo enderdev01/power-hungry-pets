@@ -12,111 +12,111 @@ export interface DescribedAckError {
 
 const DESCRIPTIONS: Record<string, DescribedAckError> = {
   INVALID_PAYLOAD: {
-    sentence: 'The server rejected the request shape — try again.',
+    sentence: 'El servidor rechazó el formato de la solicitud. Intentá de nuevo.',
     recovery: 'retry',
   },
   INTERNAL_ERROR: {
-    sentence: 'Unexpected server error — try again.',
+    sentence: 'Ocurrió un error inesperado en el servidor. Intentá de nuevo.',
     recovery: 'retry',
   },
   RATE_LIMITED: {
-    sentence: 'Too many join attempts — wait a minute and try again.',
+    sentence: 'Hubo demasiados intentos de ingreso. Esperá un minuto e intentá de nuevo.',
     recovery: 'retry',
   },
   NOT_IMPLEMENTED: {
-    sentence: 'That part is not built yet.',
+    sentence: 'Esa función todavía no está disponible.',
     recovery: 'none',
   },
   ROOM_NOT_FOUND: {
-    sentence: 'No live room with that code — check the code or pin a new room.',
+    sentence: 'No existe una sala activa con ese código. Revisalo o creá una sala nueva.',
     recovery: 'edit-input',
   },
   ROOM_FULL: {
-    sentence: 'That room already holds the maximum of 6 players.',
+    sentence: 'Esa sala ya alcanzó el máximo de 6 jugadores.',
     recovery: 'edit-input',
   },
   DUPLICATE_SOCKET: {
-    sentence: 'This tab already holds a seat — leave the current room first.',
+    sentence: 'Esta pestaña ya ocupa un asiento. Salí de la sala actual primero.',
     recovery: 'none',
   },
   INVALID_RECONNECT_TOKEN: {
-    sentence: 'Your seat could not be restored — join the room again.',
+    sentence: 'No se pudo recuperar tu asiento. Volvé a ingresar a la sala.',
     recovery: 'edit-input',
   },
   INVALID_DISPLAY_NAME: {
-    sentence: 'Pick a display name of 1–24 characters.',
+    sentence: 'Elegí un nombre de entre 1 y 24 caracteres.',
     recovery: 'edit-input',
   },
   INVALID_ROOM_TRANSITION: {
-    sentence: 'That move is not allowed for the room right now.',
+    sentence: 'Ese movimiento no está permitido en el estado actual de la sala.',
     recovery: 'none',
   },
   NOT_HOST: {
-    sentence: 'Only the room host can start the match.',
+    sentence: 'Solo el anfitrión de la sala puede comenzar la partida.',
     recovery: 'none',
   },
   PLAYER_NOT_FOUND: {
-    sentence: 'Your seat is not part of this room.',
+    sentence: 'Tu asiento no pertenece a esta sala.',
     recovery: 'edit-input',
   },
   SOCKET_NOT_BOUND: {
-    sentence: 'This tab lost its seat binding — join the room again.',
+    sentence: 'Esta pestaña perdió su asiento. Volvé a ingresar a la sala.',
     recovery: 'edit-input',
   },
   ROOM_CODE_GENERATION_FAILED: {
-    sentence: 'The server could not mint a room code — try again.',
+    sentence: 'El servidor no pudo generar un código de sala. Intentá de nuevo.',
     recovery: 'retry',
   },
   INVALID_ROOM_CODE: {
-    sentence: 'That room code is not usable.',
+    sentence: 'Ese código de sala no es válido.',
     recovery: 'edit-input',
   },
   SESSION_NOT_FOUND: {
-    sentence: 'No live match session for this room — start it from the lobby.',
+    sentence: 'No hay una partida activa para esta sala. Iniciala desde la sala de espera.',
     recovery: 'retry',
   },
   SESSION_ALREADY_EXISTS: {
-    sentence: 'A match session already runs for this room.',
+    sentence: 'Ya hay una partida activa en esta sala.',
     recovery: 'none',
   },
   INVALID_ROOM_STATUS: {
-    sentence: 'The room is not in the stage that action needs.',
+    sentence: 'La sala no está en el estado requerido para esa acción.',
     recovery: 'retry',
   },
   INVALID_ROSTER: {
-    sentence: 'The room roster is not valid for that action.',
+    sentence: 'La lista de jugadores no es válida para esa acción.',
     recovery: 'retry',
   },
   INVALID_SEED: {
-    sentence: 'The server could not seed the match — try again.',
+    sentence: 'El servidor no pudo iniciar la partida. Intentá de nuevo.',
     recovery: 'retry',
   },
   ACTOR_NOT_AUTHENTICATED: {
-    sentence: 'This tab is not authorized for that action.',
+    sentence: 'Esta pestaña no está autorizada para esa acción.',
     recovery: 'edit-input',
   },
   ENGINE_REJECTED: {
-    sentence: 'The game rules rejected that move.',
+    sentence: 'Las reglas del juego rechazaron ese movimiento.',
     recovery: 'none',
   },
   NO_ACTIVE_ROUND: {
-    sentence: 'No live round is running right now.',
+    sentence: 'No hay una ronda activa en este momento.',
     recovery: 'none',
   },
   UNKNOWN_EVENT_TYPE: {
-    sentence: 'The server refused an unknown event type.',
+    sentence: 'El servidor rechazó un tipo de evento desconocido.',
     recovery: 'retry',
   },
   UNKNOWN_PUBLIC_EVENT: {
-    sentence: 'The server refused a malformed game event.',
+    sentence: 'El servidor rechazó un evento de juego inválido.',
     recovery: 'retry',
   },
   PLAYER_NOT_IN_GAME: {
-    sentence: 'Your seat is not part of the live match.',
+    sentence: 'Tu asiento no forma parte de la partida activa.',
     recovery: 'edit-input',
   },
   UNKNOWN_PENDING_INTERACTION: {
-    sentence: 'The pending decision is no longer open.',
+    sentence: 'La decisión pendiente ya no está disponible.',
     recovery: 'retry',
   },
 };
@@ -125,7 +125,7 @@ const DESCRIPTIONS: Record<string, DescribedAckError> = {
 export function describeAckError(code: string): DescribedAckError {
   return (
     DESCRIPTIONS[code] ?? {
-      sentence: `The server refused the request (${code}) — try again.`,
+      sentence: `El servidor rechazó la solicitud (${code}). Intentá de nuevo.`,
       recovery: 'retry',
     }
   );

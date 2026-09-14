@@ -30,7 +30,8 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
   const room = state.room;
   const self = state.self;
   const decision = evaluateStart(room, self, state.connection);
-  const hostName = room?.players.find((player) => player.isHost)?.displayName ?? 'the host';
+  const hostName =
+    room?.players.find((player) => player.isHost)?.displayName ?? 'la persona anfitriona';
   const matchStarted = room?.status === 'IN_MATCH';
   const waitingForHost = decision.reason === 'not-host' && !matchStarted;
   const needsSeat = self === null;
@@ -68,7 +69,7 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
                 void controller.retry();
               }}
             >
-              Try again
+              Intentar de nuevo
             </button>
           )}
           {state.error.recovery === 'edit-input' && (
@@ -79,17 +80,17 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
                 controller.clearError();
               }}
             >
-              Back to the form
+              Volver al formulario
             </button>
           )}
         </section>
       )}
 
       {needsSeat && (
-        <section className="slip join-prompt" aria-label="Join this room">
+        <section className="slip join-prompt" aria-label="Unirse a esta sala">
           <span className="pin" aria-hidden="true" />
           <p className="field-label">
-            <label htmlFor="join-name">Your name</label>
+            <label htmlFor="join-name">Tu nombre</label>
           </p>
           <div className="join-row">
             <input
@@ -108,21 +109,21 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
                 void controller.joinRoom(code, joinName);
               }}
             >
-              Pin me to this room
+              Unirme a esta sala
             </button>
           </div>
           <div className="actions">
             <button type="button" className="action-button" onClick={() => navigate('/')}>
-              Back to the invitation
+              Volver a la invitación
             </button>
           </div>
         </section>
       )}
 
       <div className="lobby-columns">
-        <section className="slip invitation" aria-label="Room invitation">
+        <section className="slip invitation" aria-label="Invitación de la sala">
           <span className="pin" aria-hidden="true" />
-          <p className="field-label">Room code</p>
+          <p className="field-label">Código de sala</p>
           <h1 className="room-code">{code}</h1>
           <button
             type="button"
@@ -131,62 +132,62 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
               void handleCopy();
             }}
           >
-            Copy invite link
+            Copiar enlace de invitación
           </button>
           {copyOutcome === 'copied' && (
             <p className="hint" role="status">
-              Invite link copied for room {code}.
+              Se copió el enlace de invitación de la sala {code}.
             </p>
           )}
           {copyOutcome === 'failed' && (
             <p className="hint" role="status">
-              Copy failed — read the code out loud: {code}.
+              No se pudo copiar el enlace. Compartí este código: {code}.
             </p>
           )}
         </section>
 
-        <section className="slip roster" aria-label="Players at the board">
+        <section className="slip roster" aria-label="Jugadores en el tablero">
           <span className="pin" aria-hidden="true" />
-          <h2 className="field-label">Players ({room?.players.length ?? 0}/6)</h2>
+          <h2 className="field-label">Jugadores ({room?.players.length ?? 0}/6)</h2>
           <ul className="player-list">
             {room?.players.map((player) => (
               <li key={player.playerId} className="player-row">
                 <span className="player-name">{player.displayName}</span>
-                <span className="player-meta">seat {player.seatNumber}</span>
-                {player.isHost && <span className="host-tag">HOST</span>}
+                <span className="player-meta">asiento {player.seatNumber}</span>
+                {player.isHost && <span className="host-tag">ANFITRIÓN</span>}
                 {player.connected ? (
-                  <span className="presence">at the board</span>
+                  <span className="presence">en el tablero</span>
                 ) : (
-                  <span className="presence away">away</span>
+                  <span className="presence away">ausente</span>
                 )}
               </li>
             ))}
           </ul>
           {(room === null || room.players.length === 0) && (
             <p className="hint" role="status">
-              No slips pinned yet — the board is open. Share the invite and the first name will
-              appear here.
+              Todavía no hay fichas en el tablero. Compartí la invitación y el primer nombre
+              aparecerá acá.
             </p>
           )}
           {room !== null && room.players.length === 1 && (
             <p className="hint" role="status">
-              Waiting for the first guest — share the invite.
+              Esperando al primer invitado. Compartí la invitación.
             </p>
           )}
         </section>
       </div>
 
       {self !== null && (
-        <section className="slip host-actions" aria-label="Host actions">
+        <section className="slip host-actions" aria-label="Acciones del anfitrión">
           <span className="pin" aria-hidden="true" />
-          <h2 className="field-label">Host actions</h2>
+          <h2 className="field-label">Acciones del anfitrión</h2>
           {matchStarted ? (
             <p className="hint" role="status">
-              The match has started — follow the game table.
+              La partida comenzó. Seguí el juego en la mesa.
             </p>
           ) : waitingForHost ? (
             <p className="hint" role="status">
-              Waiting for {hostName} to start the match.
+              Esperando a que {hostName} comience la partida.
             </p>
           ) : (
             <>
@@ -198,7 +199,7 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
                   void controller.startMatch();
                 }}
               >
-                Start the match
+                Comenzar la partida
               </button>
               {decision.reason !== null && (
                 <p className="hint" role="status">
@@ -208,14 +209,14 @@ export function Lobby({ code, controller, navigate }: LobbyProps) {
             </>
           )}
           <button type="button" className="action-button" onClick={handleLeave}>
-            Leave the room
+            Salir de la sala
           </button>
         </section>
       )}
 
-      <section className="slip notice-log" aria-label="Room notices">
+      <section className="slip notice-log" aria-label="Avisos de la sala">
         <span className="pin" aria-hidden="true" />
-        <h2 className="field-label">Notices</h2>
+        <h2 className="field-label">Avisos</h2>
         <div className="notice-list" role="log" aria-live="polite">
           {[...state.notices].reverse().map((notice) => (
             <p key={notice.id} className={`notice notice-${notice.tone}`}>

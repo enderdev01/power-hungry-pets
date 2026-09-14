@@ -5,7 +5,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'Power Hungry Pets',
-  description: 'A private online table for the Power Hungry Pets card game.',
+  description: 'Una mesa privada en línea para el juego de cartas Power Hungry Pets.',
 };
 
 /* Safe-area env() values resolve to 0 unless the page opts into
@@ -17,7 +17,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body>
         {/* Approved direction contract (seed 9719d81e), placed as a real body
             comment at hydration; see direction-contract.tsx for the precise

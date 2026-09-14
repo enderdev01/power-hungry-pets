@@ -238,7 +238,9 @@ describe('room-flow controller', () => {
       Promise.resolve({ ...ackOf('ABC12', 'p-2', 2, LOBBY), reconnectToken: 'tok-2' }),
     );
     await controller.joinRoom('ABC12', 'Bruno');
-    gateway.startQueue.push(() => Promise.reject(ackError('NOT_HOST', 'only the host may start')));
+    gateway.startQueue.push(() =>
+      Promise.reject(ackError('NOT_HOST', 'only la persona anfitriona may start')),
+    );
 
     const started = await controller.startMatch();
 
@@ -261,7 +263,7 @@ describe('room-flow controller', () => {
     await controller.startMatch();
 
     expect(controller.getState().room?.status).toBe('IN_MATCH');
-    expect(controller.getState().notices.at(-1)?.text).toBe('The match has started.');
+    expect(controller.getState().notices.at(-1)?.text).toBe('La partida comenzó.');
   });
 
   it('acknowledges a leave, clears this room’s storage, and reports the code', async () => {
@@ -280,7 +282,7 @@ describe('room-flow controller', () => {
     expect(controller.getState().self).toBeNull();
     expect(stores.tokenSink.load('ABC12')).toBeNull();
     expect(stores.seatStore.load('ABC12')).toBeNull();
-    expect(controller.getState().notices.at(-1)?.text).toContain('You left room ABC12');
+    expect(controller.getState().notices.at(-1)?.text).toContain('Saliste de la sala ABC12');
   });
 
   describe('seat restoration (reconnect token persistence)', () => {
