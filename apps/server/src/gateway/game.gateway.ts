@@ -52,6 +52,7 @@ import {
   type RoomCreateData,
   type RoomJoinData,
   type RoomLeaveData,
+  type RoomReturnToLobbyData,
   type RoomStartData,
   type SystemPingData,
   type SystemPingRequest,
@@ -318,6 +319,40 @@ export class GameGateway implements OnGatewayDisconnect {
       this.fanoutRoomState(code);
       const publicView = this.sessions.getPublicView(code, room);
       return ackSuccess<RoomStartData>({ room, publicView });
+    });
+  }
+
+  @SubscribeMessage(ClientEvents.roomReturnToLobby)
+  handleRoomReturnToLobby(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() payload: unknown,
+  ): AckEnvelope<unknown> {
+    return this.guarded(() => {
+      if (!isRecord(payload) || typeof payload.code !== 'string') {
+        return ackFailure('INVALID_PAYLOAD', 'room:return-to-lobby requires { code: string }');
+      }
+      const code = payload.code.trim().toUpperCase();
+      // Any seated player of the finished room may bring the table back; the
+      // registry transition still runs under the server-internal host identity.
+      this.requireBinding(client.id, code);
+      const finished = this.requireRoomSnapshot(code);
+      if (finished.status !== RoomStatus.Finished) {
+        return ackFailure(
+          'INVALID_ROOM_TRANSITION',
+          `room ${code} can only return to its lobby after the match finished`,
+        );
+      }
+      this.registry.transitionRoom({
+        code,
+        playerId: finished.hostPlayerId,
+        nextStatus: RoomStatus.Lobby,
+      });
+      // The finished match is over: its session goes, so the next room:start
+      // deals a brand-new match for the same seats.
+      this.sessions.deleteSession(code);
+      const room = this.requireRoomSnapshot(code);
+      this.fanoutRoomState(code);
+      return ackSuccess<RoomReturnToLobbyData>({ room });
     });
   }
 

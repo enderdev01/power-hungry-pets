@@ -91,6 +91,7 @@ export const ClientEvents = {
   roomJoin: 'room:join',
   roomLeave: 'room:leave',
   roomStart: 'room:start',
+  roomReturnToLobby: 'room:return-to-lobby',
   gameCommand: 'game:command',
 } as const;
 
@@ -173,6 +174,17 @@ export interface RoomLeaveRequest {
 export interface RoomLeaveData {
   /** Remaining room snapshot, or `null` when the leaving seat was the last. */
   room: RoomSnapshot | null;
+}
+
+/** Payload sent by a seated client for the `room:return-to-lobby` event. */
+export interface RoomReturnToLobbyRequest {
+  code: string;
+}
+
+/** Data returned in a successful `room:return-to-lobby` acknowledgement. */
+export interface RoomReturnToLobbyData {
+  /** Fresh room snapshot back at LOBBY status with the same seats. */
+  room: RoomSnapshot;
 }
 
 /** Payload sent by a client for the `room:start` event. */

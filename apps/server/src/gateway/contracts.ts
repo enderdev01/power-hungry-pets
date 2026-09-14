@@ -86,6 +86,7 @@ export type SystemPingData = import('@power-hungry-pets/protocol').SystemPingDat
 export type RoomCreateData = import('@power-hungry-pets/protocol').RoomCreateData;
 export type RoomJoinData = import('@power-hungry-pets/protocol').RoomJoinData;
 export type RoomLeaveData = import('@power-hungry-pets/protocol').RoomLeaveData;
+export type RoomReturnToLobbyData = import('@power-hungry-pets/protocol').RoomReturnToLobbyData;
 export type RoomUpdatedEvent = import('@power-hungry-pets/protocol').RoomUpdatedEvent;
 
 /**
@@ -240,7 +241,13 @@ export type ProtocolSeamCompat = {
   matchEndedBroadcast: AssertEqual<MatchEndedBroadcast, ProtocolMatchEndedBroadcast>;
   clientEventNames: AssertEqual<
     ClientEventName,
-    'system:ping' | 'room:create' | 'room:join' | 'room:leave' | 'room:start' | 'game:command'
+    | 'system:ping'
+    | 'room:create'
+    | 'room:join'
+    | 'room:leave'
+    | 'room:start'
+    | 'room:return-to-lobby'
+    | 'game:command'
   >;
   serverEventNames: AssertEqual<
     ServerEventName,

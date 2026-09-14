@@ -6,6 +6,8 @@
  */
 import type { TurnCommand } from '@power-hungry-pets/game-engine';
 import { createServer, type ServerHandles } from '../src/main';
+import { GameSessionService } from '../src/session/game-session.service';
+import type { RoomUpdatedEvent } from '@power-hungry-pets/protocol';
 import {
   ClientEvents,
   ServerEvents,
@@ -16,6 +18,7 @@ import {
   type MatchEndedBroadcast,
   type RoomJoinData,
   type RoomLeaveData,
+  type RoomReturnToLobbyData,
   type RoomStartData,
 } from '../src/gateway/contracts';
 import {
@@ -263,6 +266,26 @@ describe('gateway game sessions', () => {
     }
   });
 
+  it('rejects returning to the lobby before the match has finished', async () => {
+    const fixture = await createLobbyRoom(server.port);
+    try {
+      await startMatch(server.port, fixture);
+      const early = await emitAck<RoomReturnToLobbyData>(
+        fixture.host.socket,
+        ClientEvents.roomReturnToLobby,
+        { code: fixture.code },
+      );
+      expect(early.ok).toBe(false);
+      if (early.ok) {
+        throw new Error('return-to-lobby must fail mid-match');
+      }
+      expect(early.error.code).toBe('INVALID_ROOM_TRANSITION');
+      expect(server.app.get(GameSessionService).getSnapshot(fixture.code)).toBeDefined();
+    } finally {
+      await closeRoom(fixture);
+    }
+  });
+
   it('drives canonical legal actions over sockets until the match truly ends', async () => {
     const fixture = await createLobbyRoom(server.port);
     try {
@@ -314,7 +337,30 @@ describe('gateway game sessions', () => {
       expect(matchEnded[0]!.room.status).toBe('FINISHED');
       expect(matchEnded[0]!.winners.length).toBeGreaterThan(0);
 
-      // Last-seat leave after FINISHED is allowed and cleans up the session:
+      // Any seated player may bring the finished room back to its lobby with
+      // the same seats; the finished session is removed.
+      const roomUpdates = collectEvents<RoomUpdatedEvent>(
+        fixture.host.socket,
+        ServerEvents.roomUpdated,
+      );
+      const back = await emitAck<RoomReturnToLobbyData>(
+        fixture.guests[0]!.socket,
+        ClientEvents.roomReturnToLobby,
+        { code: fixture.code },
+      );
+      expect(back.ok).toBe(true);
+      if (!back.ok) {
+        throw new Error(back.error.message);
+      }
+      expect(back.data.room.status).toBe('LOBBY');
+      expect(back.data.room.players.map((player) => player.playerId).sort()).toEqual(
+        fixture.seats.map((seat) => seat.playerId).sort(),
+      );
+      await waitForCount(roomUpdates, 1);
+      expect(roomUpdates[roomUpdates.length - 1]!.room.status).toBe('LOBBY');
+      expect(server.app.get(GameSessionService).getSnapshot(fixture.code)).toBeUndefined();
+
+      // Last-seat leave from the lobby is allowed and cleans up the room:
       // the room disappears and nothing is left to join.
       const hostLeave = await emitAck<RoomLeaveData>(fixture.host.socket, ClientEvents.roomLeave, {
         code: fixture.code,

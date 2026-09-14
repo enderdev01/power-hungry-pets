@@ -237,6 +237,29 @@ describe('RoomRegistry — joining', () => {
     expect(registry.getRoom(code)?.players).toHaveLength(2);
   });
 
+  it('lets a finished room return to its lobby with the same seats', () => {
+    const registry = new RoomRegistry();
+    const creator = registry.createRoom({ displayName: 'host', socketId: 'socket-host' });
+    const { code } = creator;
+    registry.joinRoom({ code, displayName: 'guest', socketId: 'socket-guest' });
+    registry.transitionRoom({ code, playerId: creator.playerId, nextStatus: RoomStatus.Lobby });
+    expectRoomError(RoomErrorCode.InvalidRoomTransition, () =>
+      registry.transitionRoom({ code, playerId: creator.playerId, nextStatus: RoomStatus.Lobby }),
+    );
+    registry.transitionRoom({ code, playerId: creator.playerId, nextStatus: RoomStatus.InMatch });
+    expectRoomError(RoomErrorCode.InvalidRoomTransition, () =>
+      registry.transitionRoom({ code, playerId: creator.playerId, nextStatus: RoomStatus.Lobby }),
+    );
+    registry.transitionRoom({ code, playerId: creator.playerId, nextStatus: RoomStatus.Finished });
+    const lobby = registry.transitionRoom({
+      code,
+      playerId: creator.playerId,
+      nextStatus: RoomStatus.Lobby,
+    });
+    expect(lobby.status).toBe(RoomStatus.Lobby);
+    expect(lobby.players).toHaveLength(2);
+  });
+
   it('rejects duplicate socket ids across joins and rooms', () => {
     const registry = new RoomRegistry();
     const creator = registry.createRoom({ displayName: 'host', socketId: 'socket-0' });

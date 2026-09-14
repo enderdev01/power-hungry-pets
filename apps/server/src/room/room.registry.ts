@@ -26,7 +26,9 @@ const ALLOWED_TRANSITIONS: Readonly<Record<RoomStatus, readonly RoomStatus[]>> =
   [RoomStatus.Created]: [RoomStatus.Lobby, RoomStatus.Expired],
   [RoomStatus.Lobby]: [RoomStatus.InMatch, RoomStatus.Expired],
   [RoomStatus.InMatch]: [RoomStatus.Finished, RoomStatus.Expired],
-  [RoomStatus.Finished]: [RoomStatus.Expired],
+  // A finished room may go back to its lobby with the same seats for a new
+  // match (explicit room:return-to-lobby); nothing else re-enters LOBBY.
+  [RoomStatus.Finished]: [RoomStatus.Lobby, RoomStatus.Expired],
   [RoomStatus.Expired]: [],
 };
 
