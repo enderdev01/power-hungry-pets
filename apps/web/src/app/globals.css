@@ -1771,6 +1771,79 @@ body {
   text-align: center;
 }
 
+/* Top pile card zoom: a full-card tap target and a readable close-up. */
+.game-pile-zoom-trigger {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  min-height: 3rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--card-radius);
+  background: transparent;
+  cursor: zoom-in;
+  pointer-events: auto;
+}
+
+.game-card-zoom-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 38;
+  display: grid;
+  place-items: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgba(5, 14, 18, 0.85);
+  overflow-y: auto;
+}
+
+.game-card-zoom {
+  display: grid;
+  justify-items: center;
+  gap: 0.45rem;
+  width: min(22rem, 100%);
+  color: var(--ink, #f5f1e6);
+  text-align: center;
+  animation: motion-modal-enter 220ms ease-out;
+  --card-w: min(17rem, 68vw, calc(55vh * 4 / 7));
+  --card-radius: 0.9rem;
+}
+
+.game-card-zoom-card .game-card-placeholder {
+  box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.6);
+}
+
+.game-card-zoom-title {
+  margin: 0.4rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 900;
+}
+
+.game-card-zoom-meta {
+  margin: 0;
+  color: var(--arcade-yellow, #ffd23f);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.game-card-zoom-effect {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.game-card-zoom .game-card-zoom-close {
+  min-width: 10rem;
+  margin-top: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: #ffd23f;
+  color: #1a1712;
+  font-family: ui-rounded, 'SF Pro Rounded', 'Nunito', system-ui, sans-serif;
+  font-weight: 800;
+  box-shadow: 0 0.25rem 0 #c19a16;
+}
+
 /* ---- Target picker (not mandatory) --------------------------------------- */
 
 .game-target-picker-overlay {

@@ -316,7 +316,8 @@ describe('game table shell', () => {
         state={flowState({ privateView: privateView(SELF_ID) })}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The pile close-up viewer sends no game command; only gameplay controls count.
+    expect(container.querySelectorAll('button:not(.game-pile-zoom-trigger)')).toHaveLength(0);
   });
 
   it('renders no gameplay controls while the private projection is missing', () => {
@@ -326,7 +327,8 @@ describe('game table shell', () => {
         state={flowState({ privateView: null })}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The pile close-up viewer sends no game command; only gameplay controls count.
+    expect(container.querySelectorAll('button:not(.game-pile-zoom-trigger)')).toHaveLength(0);
   });
 
   it('never renders a match result from live broadcast flags alone', () => {
@@ -631,7 +633,8 @@ describe('game table draw control (WU6)', () => {
         })}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The pile close-up viewer sends no game command; only gameplay controls count.
+    expect(container.querySelectorAll('button:not(.game-pile-zoom-trigger)')).toHaveLength(0);
   });
 
   it('renders no Draw control when the legal DRAW_CARD belongs to another actor', () => {
@@ -646,7 +649,8 @@ describe('game table draw control (WU6)', () => {
         })}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The pile close-up viewer sends no game command; only gameplay controls count.
+    expect(container.querySelectorAll('button:not(.game-pile-zoom-trigger)')).toHaveLength(0);
   });
 
   it('disables and renames the draw control while a draw is in flight', () => {
@@ -775,7 +779,8 @@ describe('game table play controls (WU6)', () => {
         })}
       />,
     );
-    expect(container.querySelectorAll('button')).toHaveLength(0);
+    // The pile close-up viewer sends no game command; only gameplay controls count.
+    expect(container.querySelectorAll('button:not(.game-pile-zoom-trigger)')).toHaveLength(0);
   });
 
   it('keeps play controls off cards whose instance ids the actions do not name', () => {
@@ -1999,6 +2004,38 @@ describe('game table center-action stage (M8 finish)', () => {
     expect(piles?.[2]).toHaveTextContent('Carta oculta');
     expect(screen.getByText(/^18 cartas$/i)).toBeInTheDocument();
     expect(screen.getByText(/^1 boca abajo$/i)).toBeInTheDocument();
+  });
+});
+
+describe('top pile card close-up', () => {
+  const PILE_VIEW = viewWithDiscards(
+    [{ card: { value: 4, type: 'CAPARAZON_ARMAZON' }, origin: 'PLAYED' }],
+    [{ card: { value: 5, type: 'SERPIENTE_ENCANTADORA' }, origin: 'FORCED_PLAY' }],
+  );
+
+  it('opens the last played card with its name, player, and effect, then closes', async () => {
+    const controller = controllerStub();
+    render(
+      <GameTable
+        controller={controller as RoomFlowController}
+        state={flowState({ publicView: PILE_VIEW })}
+      />,
+    );
+    const triggers = document.querySelectorAll('.game-pile-zoom-trigger');
+    // Only the top card of the pile can be opened.
+    expect(triggers).toHaveLength(1);
+    await userEvent.click(triggers[0] as HTMLElement);
+    const dialog = screen.getByRole('dialog', { name: 'Serpiente Encantadora' });
+    expect(within(dialog).getByText(/Valor 5 · forzada boca arriba de Bruno/)).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('Obligá a otro jugador a revelar su carta y robar una nueva.'),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cerrar' })).toHaveFocus();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Reading a card never sends a game command.
+    expect(controller.playCard).not.toHaveBeenCalled();
+    expect(controller.drawCard).not.toHaveBeenCalled();
   });
 });
 

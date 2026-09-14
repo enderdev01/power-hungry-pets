@@ -516,6 +516,19 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
   // Conejito duel overlay: the public DUEL_RESOLVED outcome, shown before the
   // round/match result and the next automatic draw.
   const [duel, setDuel] = useState<DuelSnapshot | null>(null);
+  // Zoomed pile card (the top public discard), by pile key; presentation only.
+  const [zoomKey, setZoomKey] = useState<string | null>(null);
+  const zoomTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const zoomCloseRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (zoomKey !== null) {
+      zoomCloseRef.current?.focus();
+    }
+  }, [zoomKey]);
+  const closeZoom = (): void => {
+    setZoomKey(null);
+    zoomTriggerRef.current?.focus();
+  };
   useEffect(() => {
     if (duel === null) {
       return;
@@ -865,6 +878,8 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
       : [],
   );
   const pile = pileCards(pileOrderRef.current, publicView);
+  // The zoom follows its card; if that card left the pile (new round), it closes.
+  const zoomEntry = zoomKey === null ? null : (pile.find((entry) => entry.key === zoomKey) ?? null);
   // Any confirmed landing/flip addresses the shared pile's newest card.
   const discardPileMotion =
     activeMotion !== null &&
@@ -1052,9 +1067,10 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
                 Descartes
               </span>
             )}
-            {pile.slice(-PILE_VISIBLE_LIMIT).map((entry) => {
+            {pile.slice(-PILE_VISIBLE_LIMIT).map((entry, index, visible) => {
               const forced = entry.discard.origin === 'FORCED_PLAY';
               const tilt = pileTilt(entry.key);
+              const isTop = index === visible.length - 1;
               return (
                 <div
                   key={entry.key}
@@ -1075,6 +1091,16 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
                     originLabel={discardOriginLabel(entry.discard.origin) ?? undefined}
                     label={`Carta ${entry.discard.card.value} jugada por ${entry.playerName}`}
                   />
+                  {isTop && (
+                    // The last played card can be opened to read it up close.
+                    <button
+                      type="button"
+                      className="game-pile-zoom-trigger"
+                      ref={zoomTriggerRef}
+                      aria-label={`Ver de cerca: ${cardPresentation(entry.discard.card).name}, jugada por ${entry.playerName}`}
+                      onClick={() => setZoomKey(entry.key)}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -1269,6 +1295,60 @@ export function GameTable({ controller, state, assetConfig, autoDraw = false }: 
           </section>
         )}
       </div>
+
+      {zoomEntry !== null && !decisionOpen && (
+        <div
+          className="game-card-zoom-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeZoom();
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeZoom();
+            }
+          }}
+        >
+          <div
+            className="game-card-zoom"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="game-card-zoom-title"
+          >
+            <div className="game-card-zoom-card">
+              <CardPlaceholder
+                card={zoomEntry.discard.card}
+                assetConfig={assetConfig}
+                originLabel={discardOriginLabel(zoomEntry.discard.origin) ?? undefined}
+                label={`${cardPresentation(zoomEntry.discard.card).name}, valor ${zoomEntry.discard.card.value}`}
+              />
+            </div>
+            <h2 id="game-card-zoom-title" className="game-card-zoom-title">
+              {cardPresentation(zoomEntry.discard.card).name}
+            </h2>
+            <p className="game-card-zoom-meta">
+              {`Valor ${zoomEntry.discard.card.value} · ${
+                zoomEntry.discard.origin === 'PLAYED'
+                  ? `jugada por ${zoomEntry.playerName}`
+                  : `${(discardOriginLabel(zoomEntry.discard.origin) ?? '').toLowerCase()} de ${zoomEntry.playerName}`
+              }`}
+            </p>
+            <p className="game-card-zoom-effect">
+              {cardPresentation(zoomEntry.discard.card).effectSummary}
+            </p>
+            <button
+              type="button"
+              className="action-button game-card-zoom-close"
+              ref={zoomCloseRef}
+              onClick={closeZoom}
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
 
       {decisionOpen && (
         <PrivateDecisionModal
