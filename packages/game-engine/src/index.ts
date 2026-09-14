@@ -69,6 +69,7 @@ export type {
   EliminationErrorCode,
   HandRedealtEvent,
   HandSwappedEvent,
+  DuelResolvedEvent,
   HandTargetDecision,
   HandsRevealedEvent,
   PlayerEliminatedEvent,

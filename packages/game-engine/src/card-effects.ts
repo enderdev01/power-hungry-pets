@@ -453,9 +453,10 @@ function moveHandFaceUp(
  * the acting player's hand with the card in one legal, active, unprotected
  * other player's hand; the lower-valued holder is eliminated through the
  * centralized `eliminatePlayer`, and equal values eliminate nobody (project
- * resolution in open questions). The comparison itself reveals no values: no
- * value-bearing event is emitted, so the only public signals are the played
- * card and any elimination reveal owned by `eliminatePlayer`. The target is a
+ * resolution in open questions). The comparison itself reveals no values: the
+ * public signals are the played card, a value-free DUEL_RESOLVED outcome
+ * (participants and loser, or a tie), and any elimination reveal owned by
+ * `eliminatePlayer`. The target is a
  * single atomic decision carried on the play command, so the handler
  * re-validates through the centralized classifier and leaves the state
  * untouched on any illegal target (rules §14).
@@ -485,10 +486,16 @@ function resolveConejitoPrintedAction(
   }
   const actorValue = actor.hand[0].value;
   const targetValue = target.hand[0].value;
+  const duel = (loser: PlayerId | null) => ({
+    type: 'DUEL_RESOLVED' as const,
+    actorId: context.playerId,
+    targetId: context.targetId as PlayerId,
+    loserId: loser,
+  });
   if (actorValue === targetValue) {
-    // Equal values eliminate nobody (project resolution); nothing else
-    // happens publicly, so the turn advances through the normal path.
-    return { state, events: [], eliminatedPlayerId: null };
+    // Equal values eliminate nobody (project resolution); only the duel's
+    // participants and tie outcome become public — never the values.
+    return { state, events: [duel(null)], eliminatedPlayerId: null };
   }
   const loserId = actorValue < targetValue ? context.playerId : context.targetId;
   const elimination = eliminatePlayer(state, loserId);
@@ -499,7 +506,7 @@ function resolveConejitoPrintedAction(
   }
   return {
     state: elimination.state,
-    events: elimination.events,
+    events: [duel(loserId), ...elimination.events],
     eliminatedPlayerId: loserId,
   };
 }

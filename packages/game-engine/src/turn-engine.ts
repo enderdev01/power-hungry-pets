@@ -27,6 +27,7 @@ import {
 import type { Rng } from './rng';
 import type {
   CardForcedFaceUpEvent,
+  DuelResolvedEvent,
   HandRedealtEvent,
   HandSwappedEvent,
   PlayerEliminatedEvent,
@@ -177,7 +178,8 @@ export type TurnEvent =
   | PlayerProtectedEvent
   | PlayerEliminatedEvent
   | HandsRevealedEvent
-  | RoundEndedEvent;
+  | RoundEndedEvent
+  | DuelResolvedEvent;
 
 export type TurnCommandSuccess = {
   ok: true;

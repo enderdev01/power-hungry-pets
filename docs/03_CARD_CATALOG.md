@@ -112,7 +112,7 @@ Compare the card remaining in your hand with the card in that player's hand.
 - Lower value is eliminated.
 - If both values are equal, neither player is eliminated.
 
-The compared values are not publicly revealed by the comparison itself.
+The compared values are not publicly revealed by the comparison itself. The duel's participants and its outcome (who lost, or a tie) are public, as they are when the challenge is announced at a physical table; the engine emits them as `DUEL_RESOLVED`.
 
 If no legal target exists, the card is still played and has no targeting effect.
 

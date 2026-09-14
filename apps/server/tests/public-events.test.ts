@@ -58,6 +58,11 @@ const VARIANTS: readonly VariantFixture[] = [
     expected: { type: 'PECERA_GUESS_RESOLVED', actorId: 'p1', targetId: 'p2', correct: false },
   },
   {
+    name: 'DUEL_RESOLVED',
+    input: { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: null },
+    expected: { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: null },
+  },
+  {
     name: 'SAQUEADOG_RESOLVED',
     input: { type: 'SAQUEADOG_RESOLVED', playerId: 'p3' },
     expected: { type: 'SAQUEADOG_RESOLVED', playerId: 'p3' },

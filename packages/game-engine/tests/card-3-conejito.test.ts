@@ -9,7 +9,7 @@
  *   the actor's remaining hand card value with the target's hand card value.
  *   The lower-valued holder is eliminated through the centralized
  *   `eliminatePlayer`; on equal values nobody is eliminated (project resolution).
- * - The comparison itself reveals no values: no value-bearing event is emitted,
+ * - The comparison itself reveals no values: only a value-free DUEL_RESOLVED is emitted,
  *   and the only public signals are the played card and any elimination.
  * - Targets are classified centrally: `TARGET_PROTECTED` is distinct from
  *   `ILLEGAL_TARGET` and shares the canonical `canTargetHand` seam.
@@ -165,6 +165,7 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(result.state.status).toBe('ROUND_ACTIVE');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p2' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p2' },
     ]);
   });
@@ -184,6 +185,7 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(result.state.status).toBe('ROUND_ACTIVE');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p1' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p1' },
     ]);
   });
@@ -200,7 +202,11 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(playerOf(result.state, 'p2').hand).toEqual([cardOfValue(5)]);
     expect(result.state.currentPlayerId).toBe('p2');
     expect(result.state.status).toBe('ROUND_ACTIVE');
-    expect(result.events).toEqual([{ type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD }]);
+    // A tie is public as a duel without a loser, never with the values.
+    expect(result.events).toEqual([
+      { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: null },
+    ]);
   });
 
   it('ends the round when the comparison eliminates the second-to-last survivor', () => {
@@ -214,6 +220,7 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(playerOf(result.state, 'p2').eliminated).toBe(true);
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p2' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p2' },
       { type: 'ROUND_ENDED', winnerIds: ['p1'] },
     ]);
@@ -234,6 +241,7 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(result.state.phase).toBe('DRAW_REQUIRED');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p2' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p2' },
       { type: 'ROUND_ENDED', winnerIds: ['p1'] },
     ]);
@@ -254,6 +262,7 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     expect(result.state.phase).toBe('DRAW_REQUIRED');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p2' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p2' },
       { type: 'ROUND_ENDED', winnerIds: ['p1'] },
     ]);
@@ -276,9 +285,11 @@ describe('Card 3 Conejito — voluntary play compares hands', () => {
     for (const pileCard of result.state.drawPile) {
       expect(serializedEvents).not.toContain(pileCard.instanceId);
     }
-    // No comparison-specific event type exists beyond the public play/elimination.
+    // The only comparison event is the value-free duel outcome.
     const eventTypes = result.events.map((event) => event.type);
-    expect(eventTypes).toEqual(['CARD_PLAYED', 'PLAYER_ELIMINATED']);
+    expect(eventTypes).toEqual(['CARD_PLAYED', 'DUEL_RESOLVED', 'PLAYER_ELIMINATED']);
+    const duel = result.events.find((event) => event.type === 'DUEL_RESOLVED');
+    expect(Object.keys(duel ?? {}).sort()).toEqual(['actorId', 'loserId', 'targetId', 'type']);
   });
 
   it('does not mutate the input state and returns a non-aliased clone', () => {
@@ -330,6 +341,7 @@ describe('Card 3 Conejito — Rey Gato in hand is ordinary value 10', () => {
     expect(result.state.status).toBe('ROUND_ACTIVE');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p2' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p2' },
     ]);
   });
@@ -350,6 +362,7 @@ describe('Card 3 Conejito — Rey Gato in hand is ordinary value 10', () => {
     expect(result.state.status).toBe('ROUND_ACTIVE');
     expect(result.events).toEqual([
       { type: 'CARD_PLAYED', playerId: 'p1', card: CONEJITO_CARD },
+      { type: 'DUEL_RESOLVED', actorId: 'p1', targetId: 'p2', loserId: 'p1' },
       { type: 'PLAYER_ELIMINATED', playerId: 'p1' },
     ]);
   });

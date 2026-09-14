@@ -28,6 +28,17 @@ export type CardForcedFaceUpEvent = {
   card: CardInstance;
 };
 export type CardDrawnEvent = { type: 'CARD_DRAWN'; playerId: PlayerId };
+/**
+ * Conejito duel outcome (catalog §3): who challenged whom and who lost, or
+ * `null` for a tie. It never carries the compared values; a loser's card only
+ * becomes public through the elimination reveal that follows.
+ */
+export type DuelResolvedEvent = {
+  type: 'DUEL_RESOLVED';
+  actorId: PlayerId;
+  targetId: PlayerId;
+  loserId: PlayerId | null;
+};
 export type RoundRulesEvent =
   | PlayerEliminatedEvent
   | RoundEndedEvent
@@ -37,7 +48,8 @@ export type RoundRulesEvent =
   | HandSwappedEvent
   | HandRedealtEvent
   | CardForcedFaceUpEvent
-  | CardDrawnEvent;
+  | CardDrawnEvent
+  | DuelResolvedEvent;
 
 export type EliminationErrorCode = 'PLAYER_NOT_FOUND' | 'ROUND_ALREADY_ENDED';
 

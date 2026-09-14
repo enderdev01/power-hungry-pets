@@ -33,6 +33,7 @@ export type PublicEvent =
   | { type: 'CARD_DRAWN'; playerId: PlayerId }
   | { type: 'CARD_PLAYED'; playerId: PlayerId; card: PublicEventCard }
   | { type: 'PECERA_GUESS_RESOLVED'; actorId: PlayerId; targetId: PlayerId; correct: boolean }
+  | { type: 'DUEL_RESOLVED'; actorId: PlayerId; targetId: PlayerId; loserId: PlayerId | null }
   | { type: 'SAQUEADOG_RESOLVED'; playerId: PlayerId }
   | { type: 'RATON_RESOLVED'; playerId: PlayerId }
   | { type: 'PROTECTION_EXPIRED'; playerId: PlayerId }
@@ -122,6 +123,13 @@ function sanitizeOne(event: TurnEvent | MatchRulesEvent): PublicEvent {
         actorId: event.actorId,
         targetId: event.targetId,
         correct: event.correct,
+      };
+    case 'DUEL_RESOLVED':
+      return {
+        type: event.type,
+        actorId: event.actorId,
+        targetId: event.targetId,
+        loserId: event.loserId,
       };
     case 'SAQUEADOG_RESOLVED':
     case 'RATON_RESOLVED':

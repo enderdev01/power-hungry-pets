@@ -211,3 +211,13 @@ Affected:
 
 Status: OPEN
 ```
+
+---
+
+### Conejito duel visibility
+
+A Conejito comparison previously emitted no event of its own, so other players could not tell who was challenged when the duel tied or the challenger lost, and a two-player duel that ended the round showed no outcome at all.
+
+**Decision:** The engine emits a public `DUEL_RESOLVED { actorId, targetId, loserId | null }` for every comparison that actually happens (a legal, unprotected target). It carries no values. This mirrors `PECERA_GUESS_RESOLVED`, which already publishes the challenger, the target, and the outcome.
+
+**Status:** Implemented with engine, server sanitizer, protocol, and web tests.

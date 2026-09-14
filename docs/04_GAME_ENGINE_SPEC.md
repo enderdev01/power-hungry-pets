@@ -152,6 +152,7 @@ type GameEvent =
   | { type: "PLAYER_PROTECTED"; playerId: PlayerId }
   | { type: "PROTECTION_EXPIRED"; playerId: PlayerId }
   | { type: "PLAYER_ELIMINATED"; playerId: PlayerId }
+  | { type: "DUEL_RESOLVED"; actorId: PlayerId; targetId: PlayerId; loserId: PlayerId | null }
   | { type: "HANDS_SWAPPED"; playerIds: [PlayerId, PlayerId] }
   | { type: "HANDS_REVEALED"; hands: RevealedHand[] }
   | { type: "ROUND_ENDED"; winnerIds: PlayerId[] }
@@ -160,6 +161,8 @@ type GameEvent =
 ```
 
 `HANDS_REVEALED` is the draw-pile-exhaustion reveal (rules §9): every surviving player's single hand card is publicly and simultaneously revealed. The reveal moves no cards — hands stay in place — and `HANDS_REVEALED` is always emitted before `ROUND_ENDED`. The last-survivor round end (rules §8) emits no reveal.
+
+`DUEL_RESOLVED` is the Conejito comparison outcome (catalog §3): the challenger, the challenged player, and the loser, or `null` for a tie. It never carries the compared values; a loser's card becomes public only through the `PLAYER_ELIMINATED` reveal that follows it.
 
 Events must not accidentally contain secret card data in their public form.
 

@@ -153,6 +153,7 @@ export type GamePublicEvent =
   | { type: 'CARD_DRAWN'; playerId: string }
   | { type: 'CARD_PLAYED'; playerId: string; card: PublicCard }
   | { type: 'PECERA_GUESS_RESOLVED'; actorId: string; targetId: string; correct: boolean }
+  | { type: 'DUEL_RESOLVED'; actorId: string; targetId: string; loserId: string | null }
   | { type: 'SAQUEADOG_RESOLVED'; playerId: string }
   | { type: 'RATON_RESOLVED'; playerId: string }
   | { type: 'PROTECTION_EXPIRED'; playerId: string }
