@@ -1,0 +1,6 @@
+assets/
+.impeccable/
+.codegraph/
+.atl/
+docs/
+apps/web/.next/

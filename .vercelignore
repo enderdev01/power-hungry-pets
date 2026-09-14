@@ -1,0 +1,7 @@
+assets/
+.impeccable/
+.codegraph/
+.atl/
+docs/
+.railwayignore
+apps/web/.next/
